@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الأرباح - نظام إدارة الصيدلية</title>
+<script src="supabase-lib.js"></script>
+<script src="xlsx-lib.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f1b16; color: #eef2ef; padding: 16px; padding-bottom: 60px; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; color: #6fcf97; }
+  header .userinfo { font-size: 12px; color: #9fb3a8; }
+  nav { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  nav a { padding: 8px 14px; background: #16261e; border: 1px solid #23392c; border-radius: 8px; color: #eef2ef; text-decoration: none; font-size: 13px; }
+  nav a.active { background: #6fcf97; color: #0f1b16; font-weight: 600; }
+  .card { background: #16261e; border: 1px solid #23392c; border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  .card h2 { font-size: 16px; margin-bottom: 16px; color: #6fcf97; }
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat-box { background: #0f1b16; border: 1px solid #2a4536; border-radius: 10px; padding: 16px; text-align: center; }
+  .stat-box .label { font-size: 12px; color: #9fb3a8; margin-bottom: 6px; }
+  .stat-box .value { font-size: 22px; font-weight: 700; }
+  .positive { color: #6fcf97; }
+  .negative { color: #f28b82; }
+  .neutral { color: #eef2ef; }
+  .range-buttons { display: flex; gap: 8px; margin-bottom: 16px; }
+  .range-buttons button { padding: 8px 16px; font-size: 13px; background: #23392c; color: #eef2ef; border: none; border-radius: 8px; cursor: pointer; }
+  .range-buttons button.active { background: #6fcf97; color: #0f1b16; font-weight: 600; }
+  .note { font-size: 12px; color: #9fb3a8; margin-top: 16px; line-height: 1.8; }
+  .loading { text-align: center; color: #9fb3a8; padding: 20px; }
+  .denied { text-align: center; padding: 40px; color: #9fb3a8; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 نظام إدارة الصيدلية</h1>
+  <div>
+    <span class="userinfo" id="userinfo"></span>
+    <button id="logoutBtn" style="margin-right:8px;background:#23392c;color:#eef2ef;padding:6px 12px;font-size:12px;border-radius:8px;border:none;">خروج</button>
+  </div>
+</header>
+
+<nav>
+  <a href="inventory.html">المخزون</a>
+  <a href="sales.html">المبيعات</a>
+  <a href="shortages.html">النواقص</a>
+  <a href="expenses.html">المصروفات</a>
+  <a href="profit.html" class="active">الأرباح</a>
+  <a href="users.html">المستخدمين</a>
+</nav>
+
+<div id="content" class="hidden">
+  <div class="card">
+    <div class="range-buttons">
+      <button id="btnToday">اليوم</button>
+      <button id="btnWeek">آخر أسبوع</button>
+      <button id="btnMonth" class="active">الشهر الحالي</button>
+      <button id="btnAll">كل الوقت</button>
+      <button id="exportProfitBtn" style="background:#23392c;">⬇️ تصدير إكسيل</button>
+    </div>
+
+    <div class="stats-grid" id="statsGrid">
+      <p class="loading">جاري الحساب...</p>
+    </div>
+
+    <p class="note">
+      💡 الحساب مبني على افتراض إن سعر البيع وسعر الشراء المسجّلين وقت إضافة المنتج هما "سعر العلبة الكاملة"، والسيستم بيحسب سعر الوحدة الفردية والمتوسطة منه تلقائيًا حسب تفكيك الوحدات.
+      لو مش حاطط سعر شراء لصنف معيّن، تكلفته مش هتتحسب في هامش الربح وهتفضل الأرقام أقل من الحقيقي لحد ما تحطه.
+    </p>
+  </div>
+</div>
+
+<div id="deniedBox" class="hidden denied">هذا القسم مخصص للأدمن فقط</div>
+
+<script src="config.js"></script>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">JS Error: ' + msg + ' (line ' + line + ')</div>');
+  };
+  window.onunhandledrejection = function(e) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>');
+  };
+
+  let currentRange = 'month';
+
+  (async () => {
+    const auth = await requireAuth();
+    if (!auth) return;
+
+    document.getElementById('userinfo').textContent =
+      auth.profile.full_name + ' (' + (auth.profile.role === 'admin' ? 'أدمن' : 'موظف') + ')';
+
+    if (auth.profile.role !== 'admin') {
+      document.getElementById('deniedBox').classList.remove('hidden');
+      return;
+    }
+    document.getElementById('content').classList.remove('hidden');
+    await calculate();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  document.getElementById('btnToday').addEventListener('click', () => { setRange('today'); });
+  document.getElementById('btnWeek').addEventListener('click', () => { setRange('week'); });
+  document.getElementById('btnMonth').addEventListener('click', () => { setRange('month'); });
+  document.getElementById('btnAll').addEventListener('click', () => { setRange('all'); });
+
+  function setRange(range) {
+    currentRange = range;
+    ['btnToday', 'btnWeek', 'btnMonth', 'btnAll'].forEach(id => {
+      document.getElementById(id).classList.toggle('active', id === 'btn' + range.charAt(0).toUpperCase() + range.slice(1));
+    });
+    calculate();
+  }
+
+  async function calculate() {
+    const grid = document.getElementById('statsGrid');
+    grid.innerHTML = '<p class="loading">جاري الحساب...</p>';
+
+    let startDate = null;
+    const now = new Date();
+    if (currentRange === 'today') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    } else if (currentRange === 'week') {
+      const d = new Date(now); d.setDate(d.getDate() - 7); startDate = d.toISOString();
+    } else if (currentRange === 'month') {
+      startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+    }
+
+    let salesQuery = sb.from('sales').select('quantity, unit_sold, sale_price, product_id, products(unit_medium, unit_medium_to_small, unit_large, unit_large_to_medium, unit_small)');
+    if (startDate) salesQuery = salesQuery.gte('created_at', startDate);
+    const { data: sales, error: salesError } = await salesQuery;
+
+    if (salesError) {
+      grid.innerHTML = '<p style="color:#f28b82;">تعذّر تحميل المبيعات: ' + salesError.message + '</p>';
+      return;
+    }
+
+    const { data: costs } = await sb.from('product_costs').select('product_id, purchase_price');
+    const costMap = {};
+    (costs || []).forEach(c => { costMap[c.product_id] = c.purchase_price; });
+
+    let expensesQuery = sb.from('expenses').select('amount');
+    if (startDate) expensesQuery = expensesQuery.gte('created_at', startDate);
+    const { data: expenses } = await expensesQuery;
+    const totalExpenses = (expenses || []).reduce((sum, e) => sum + Number(e.amount), 0);
+
+    let revenue = 0;
+    let cogs = 0;
+
+    for (const s of sales) {
+      revenue += Number(s.sale_price);
+
+      const p = s.products;
+      const purchasePrice = costMap[s.product_id];
+      if (p && purchasePrice) {
+        const qtyMedium = p.unit_medium_to_small || 1;
+        const qtyLarge = p.unit_large_to_medium || 1;
+        let smallQty;
+        if (s.unit_sold === p.unit_small) smallQty = s.quantity;
+        else if (s.unit_sold === p.unit_medium) smallQty = s.quantity * qtyMedium;
+        else if (s.unit_sold === p.unit_large) smallQty = s.quantity * qtyMedium * qtyLarge;
+        else smallQty = s.quantity;
+
+        const costPerSmall = purchasePrice / (qtyMedium * qtyLarge);
+        cogs += costPerSmall * smallQty;
+      }
+    }
+
+    const grossProfit = revenue - cogs;
+    const netProfit = grossProfit - totalExpenses;
+
+    window._profitCache = { revenue, cogs, grossProfit, totalExpenses, netProfit, range: currentRange };
+
+    grid.innerHTML =
+      statBox('إجمالي المبيعات', revenue, 'neutral') +
+      statBox('تكلفة البضاعة المباعة', cogs, 'negative') +
+      statBox('هامش الربح (إجمالي)', grossProfit, grossProfit >= 0 ? 'positive' : 'negative') +
+      statBox('إجمالي المصروفات', totalExpenses, 'negative') +
+      statBox('صافي الربح', netProfit, netProfit >= 0 ? 'positive' : 'negative', true);
+  }
+
+  document.getElementById('exportProfitBtn').addEventListener('click', () => {
+    const c = window._profitCache;
+    if (!c) { alert('استنى الحساب يخلص الأول'); return; }
+
+    const rows = [{
+      'البند': 'إجمالي المبيعات', 'القيمة': c.revenue.toFixed(2)
+    }, {
+      'البند': 'تكلفة البضاعة المباعة', 'القيمة': c.cogs.toFixed(2)
+    }, {
+      'البند': 'هامش الربح الإجمالي', 'القيمة': c.grossProfit.toFixed(2)
+    }, {
+      'البند': 'إجمالي المصروفات', 'القيمة': c.totalExpenses.toFixed(2)
+    }, {
+      'البند': 'صافي الربح', 'القيمة': c.netProfit.toFixed(2)
+    }];
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'الأرباح');
+    XLSX.writeFile(wb, 'تقرير_الأرباح.xlsx');
+  });
+
+  function statBox(label, value, cls, fullWidth) {
+    return '<div class="stat-box" style="' + (fullWidth ? 'grid-column:1/-1;' : '') + '">' +
+      '<div class="label">' + label + '</div>' +
+      '<div class="value ' + cls + '">' + Number(value).toLocaleString('ar-EG', { maximumFractionDigits: 0 }) + ' ج</div>' +
+      '</div>';
+  }
+</script>
+
+</body>
+</html>
