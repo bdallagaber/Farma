@@ -408,7 +408,7 @@
             advanced: [{ focusMode: 'continuous' }]
           }
         }, videoEl,
-        (result) => {
+        (result, err) => {
           if (result) {
             const code = result.getText();
             document.getElementById('p_qr').value = code;
@@ -425,6 +425,8 @@
               editProduct(existing.id);
               showAddMsg('الكود ده لصنف موجود: "' + existing.name + '" — عدّل الكمية اللي جالك وادوس حفظ', 'ok');
             }
+          } else if (err && err.name && err.name !== 'NotFoundException') {
+            status.textContent = 'خطأ أثناء المسح: ' + err.name + ' - ' + (err.message || '');
           }
         }
       );

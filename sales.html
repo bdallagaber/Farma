@@ -234,6 +234,7 @@
       ]);
       scanReader = new ZXing.BrowserMultiFormatReader(hints);
       const videoEl = document.getElementById('scanVideo');
+      let attemptCount = 0;
       await scanReader.decodeFromConstraints(
         {
           video: {
@@ -245,6 +246,7 @@
         },
         videoEl,
         async (result, err) => {
+          attemptCount++;
           if (result) {
             const code = result.getText();
             stopScan();
@@ -256,6 +258,10 @@
             } else {
               showSellMsg('الكود ده مش متسجّل لأي منتج في المخزون', 'error');
             }
+          } else if (err && err.name && err.name !== 'NotFoundException') {
+            status.textContent = 'خطأ أثناء المسح: ' + err.name + ' - ' + (err.message || '');
+          } else {
+            status.textContent = 'جاري المسح... (محاولة رقم ' + attemptCount + ')';
           }
         }
       );
