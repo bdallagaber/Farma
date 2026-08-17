@@ -64,6 +64,7 @@
   <a href="shortages.html">النواقص</a>
   <a href="expenses.html">المصروفات</a>
   <a href="profit.html">الأرباح</a>
+  <a href="search.html">🔍 بحث الأدوية</a>
   <a href="users.html">الإعدادات</a>
 </nav>
 
@@ -71,49 +72,77 @@
   <h2 id="formTitle">➕ إضافة منتج جديد</h2>
   <div class="grid">
     <div class="full-width">
-      <label>1) اسم المنتج</label>
+      <label>1) اسم المنتج (بالعربي)</label>
       <input type="text" id="p_name" placeholder="مثال: أوجمنتين">
+    </div>
+    <div class="full-width">
+      <label>الاسم بالإنجليزي</label>
+      <input type="text" id="p_name_en" placeholder="مثال: Augmentin">
     </div>
 
     <div>
-      <label>2) شكل الدواء</label>
-      <select id="p_shape">
-        <option value="برشام">برشام</option>
-        <option value="شراب">شراب</option>
-        <option value="فوار">فوار</option>
-        <option value="حقن">حقن/أمبولات</option>
-        <option value="كريم أو مرهم">كريم أو مرهم</option>
-        <option value="لبوس">لبوس</option>
-        <option value="أخرى">أخرى</option>
-      </select>
+      <label>نوع الصنف</label>
+      <select id="p_drug_type"></select>
+    </div>
+    <div>
+      <label>الشكل الدوائي</label>
+      <div style="display:flex;gap:6px;">
+        <select id="p_shape" style="margin-bottom:0;"></select>
+        <button type="button" id="addShapeBtn" class="secondary small" style="white-space:nowrap;">+ جديد</button>
+      </div>
     </div>
     <div id="other_shape_wrap" class="hidden">
       <label>وضّح الشكل</label>
       <input type="text" id="p_other_shape_note" placeholder="مثال: بخاخ">
     </div>
 
+    <div>
+      <label>التصنيف</label>
+      <div style="display:flex;gap:6px;">
+        <select id="p_classification" style="margin-bottom:0;">
+          <option value="">-- بدون --</option>
+        </select>
+        <button type="button" id="addClassBtn" class="secondary small" style="white-space:nowrap;">+ جديد</button>
+      </div>
+    </div>
+    <div>
+      <label>المادة الفعالة</label>
+      <input type="text" id="p_active_ingredient" placeholder="مثال: Amoxicillin">
+    </div>
+    <div>
+      <label>التركيز</label>
+      <input type="text" id="p_concentration" placeholder="مثال: 1 gm">
+    </div>
+    <div>
+      <label>قابل للبيع بالتجزئة (فردي)؟</label>
+      <select id="p_retail_allowed">
+        <option value="no">لا</option>
+        <option value="yes">أيوه</option>
+      </select>
+    </div>
+
     <div id="field3_wrap">
-      <label id="field3_label">3) العلبة فيها كام شريط؟</label>
+      <label id="field3_label">العلبة فيها كام شريط؟</label>
       <input type="number" id="p_field3" value="1" min="1">
     </div>
-    <div id="field4_wrap">
-      <label id="field4_label">4) الشريط فيه كام حبة؟</label>
+    <div id="field4_wrap" class="hidden">
+      <label id="field4_label">الشريط فيه كام حبة؟</label>
       <input type="number" id="p_field4" value="1" min="1">
     </div>
 
     <div>
-      <label>5) سعر العلبة (جنيه)</label>
+      <label>سعر العلبة (جنيه)</label>
       <input type="number" id="p_box_price" step="0.01" placeholder="سعر البيع للعلبة كاملة">
     </div>
     <div>
-      <label>6) الكمية (عدد العلب الكاملة المتاحة دلوقتي)</label>
+      <label>الكمية (عدد العلب الكاملة المتاحة دلوقتي)</label>
       <input type="number" id="p_boxes_qty" value="0" min="0">
     </div>
     <div id="leftover_medium_wrap" class="hidden">
       <label id="leftover_medium_label">زيادة برّه العلب: كام شريط لوحده؟</label>
       <input type="number" id="p_leftover_medium" value="0" min="0">
     </div>
-    <div>
+    <div id="leftover_small_wrap" class="hidden">
       <label id="leftover_small_label">زيادة فردية: كام حبة لوحدها؟</label>
       <input type="number" id="p_leftover_small" value="0" min="0">
     </div>
@@ -149,6 +178,9 @@
   <h2>📋 المخزون الحالي</h2>
   <div class="toolbar">
     <input type="text" id="searchBox" placeholder="🔍 ابحث بالاسم..." style="flex:1;min-width:150px;margin-bottom:0;">
+    <select id="filterShape" style="width:auto;margin-bottom:0;"><option value="">كل الأشكال</option></select>
+    <select id="filterType" style="width:auto;margin-bottom:0;"><option value="">كل الأنواع</option></select>
+    <select id="filterClass" style="width:auto;margin-bottom:0;"><option value="">كل التصنيفات</option></select>
     <button type="button" id="exportBtn" class="secondary">⬇️ تصدير إكسيل</button>
     <button type="button" id="templateBtn" class="secondary">📄 نموذج فاضي للاستيراد</button>
     <button type="button" id="importBtn" class="secondary">⬆️ استيراد إكسيل</button>
@@ -178,16 +210,9 @@
       '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>');
   };
 
-  // كل شكل دواء بيحدد الوحدة الفردية اللي بيتباع بيها، وهل خانة "3) العلبة فيها كام شريط؟" منطقية ليه ولا لأ
-  const SHAPE_CONFIG = {
-    'برشام':        { small: 'piece',   showField3: true,  field4Label: 'الشريط فيه كام حبة؟' },
-    'لبوس':         { small: 'piece',   showField3: true,  field4Label: 'الشريط فيه كام لبوسة؟' },
-    'شراب':         { small: 'piece',   showField3: false, field4Label: null },
-    'كريم أو مرهم': { small: 'piece',   showField3: false, field4Label: null },
-    'فوار':         { small: 'sachet',  showField3: false, field4Label: 'العلبة فيها كام كيس؟' },
-    'حقن':          { small: 'ampoule', showField3: false, field4Label: 'العلبة فيها كام أمبولة؟' },
-    'أخرى':         { small: 'other',   showField3: true,  field4Label: 'العلبة فيها كام وحدة فردية؟' }
-  };
+  // خريطة بسيطة: بعض الأشكال بس ليها وحدة فردية خاصة (فوار=كيس، حقن=أمبولة)، والباقي "قطعة" بشكل عام
+  const SMALL_UNIT_OVERRIDES = { 'فوار': 'sachet', 'حقن': 'ampoule', 'أمبول/حقن': 'ampoule' };
+  const STRIP_SHAPES = ['برشام', 'قرص', 'لبوس']; // الأشكال اللي بتدعم مستوى "شريط" وسيط
 
   const UNIT_LABELS = { box: 'علبة', strip: 'شريط', piece: 'قطعة', ampoule: 'أمبولة', sachet: 'كيس', other: 'أخرى' };
 
@@ -195,6 +220,72 @@
   let isAdmin = false;
   let editingProductId = null;
   let scanReader = null;
+  let customOptions = { drug_shape: [], drug_type: [], classification: [] };
+
+  function getSmallUnitFor(shape) {
+    return SMALL_UNIT_OVERRIDES[shape] || 'piece';
+  }
+
+  async function loadCustomOptions() {
+    const { data, error } = await sb.from('custom_options').select('category, parent, value').order('value');
+    if (error) return;
+    customOptions = { drug_shape: [], drug_type: [], classification: [] };
+    (data || []).forEach(o => {
+      if (!customOptions[o.category]) customOptions[o.category] = [];
+      customOptions[o.category].push({ parent: o.parent, value: o.value });
+    });
+
+    const typeSel = document.getElementById('p_drug_type');
+    typeSel.innerHTML = customOptions.drug_type.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+
+    const classSel = document.getElementById('p_classification');
+    classSel.innerHTML = '<option value="">-- بدون --</option>' +
+      customOptions.classification.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+
+    updateShapeOptionsForType();
+    populateFilterDropdowns();
+  }
+
+  function updateShapeOptionsForType() {
+    const type = document.getElementById('p_drug_type').value;
+    const shapeSel = document.getElementById('p_shape');
+    const shapes = customOptions.drug_shape.filter(o => o.parent === type);
+    shapeSel.innerHTML = shapes.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+    updateShapeFields();
+  }
+
+  function populateFilterDropdowns() {
+    const shapeF = document.getElementById('filterShape');
+    const typeF = document.getElementById('filterType');
+    const classF = document.getElementById('filterClass');
+    shapeF.innerHTML = '<option value="">كل الأشكال</option>' + customOptions.drug_shape.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+    typeF.innerHTML = '<option value="">كل الأنواع</option>' + customOptions.drug_type.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+    classF.innerHTML = '<option value="">كل التصنيفات</option>' + customOptions.classification.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+  }
+
+  document.getElementById('p_drug_type').addEventListener('change', updateShapeOptionsForType);
+
+  async function addCustomOption(category, parent) {
+    const label = category === 'drug_shape' ? 'الشكل الدوائي' : (category === 'classification' ? 'التصنيف' : 'النوع');
+    const value = prompt('اكتب اسم ' + label + ' الجديد:');
+    if (!value || !value.trim()) return;
+    const { error } = await sb.from('custom_options').insert({ category, parent: parent || null, value: value.trim() });
+    if (error) { alert('تعذّرت الإضافة: ' + error.message); return; }
+    await loadCustomOptions();
+    if (category === 'drug_shape') document.getElementById('p_shape').value = value.trim();
+    if (category === 'classification') document.getElementById('p_classification').value = value.trim();
+  }
+
+  document.getElementById('addShapeBtn').addEventListener('click', () => {
+    addCustomOption('drug_shape', document.getElementById('p_drug_type').value);
+  });
+  document.getElementById('addClassBtn').addEventListener('click', () => {
+    addCustomOption('classification', null);
+  });
+
+  document.getElementById('filterShape').addEventListener('change', () => renderInventoryTable(document.getElementById('searchBox').value));
+  document.getElementById('filterType').addEventListener('change', () => renderInventoryTable(document.getElementById('searchBox').value));
+  document.getElementById('filterClass').addEventListener('change', () => renderInventoryTable(document.getElementById('searchBox').value));
 
   (async () => {
     const auth = await requireAuth();
@@ -208,6 +299,7 @@
 
     if (isAdmin) document.getElementById('purchase_price_wrap').classList.remove('hidden');
 
+    await loadCustomOptions();
     updateShapeFields();
     await loadInventory();
   })();
@@ -221,19 +313,37 @@
   // منطق إظهار/تسمية الخانات حسب شكل الدواء
   // ------------------------------------------------------------
   document.getElementById('p_shape').addEventListener('change', updateShapeFields);
+  document.getElementById('p_retail_allowed').addEventListener('change', updateShapeFields);
 
   function updateShapeFields() {
     const shape = document.getElementById('p_shape').value;
-    const cfg = SHAPE_CONFIG[shape];
+    const retailAllowed = document.getElementById('p_retail_allowed').value === 'yes';
+    const supportsStrip = STRIP_SHAPES.includes(shape);
+    const smallUnit = getSmallUnitFor(shape);
 
     document.getElementById('other_shape_wrap').classList.toggle('hidden', shape !== 'أخرى');
 
-    const smallUnitLabel = shape === 'أخرى' ? 'وحدة فردية' : UNIT_LABELS[cfg.small];
+    if (!retailAllowed) {
+      // مش قابل للبيع بالتجزئة: العلبة وحدة واحدة كاملة، مفيش تفكيك خالص
+      document.getElementById('field3_wrap').classList.add('hidden');
+      document.getElementById('field4_wrap').classList.add('hidden');
+      document.getElementById('leftover_medium_wrap').classList.add('hidden');
+      document.getElementById('leftover_small_wrap').classList.add('hidden');
+      document.getElementById('p_field3').value = 1;
+      document.getElementById('p_field4').value = 1;
+      document.getElementById('p_leftover_medium').value = 0;
+      document.getElementById('p_leftover_small').value = 0;
+      return;
+    }
 
-    if (cfg.showField3) {
+    document.getElementById('leftover_small_wrap').classList.remove('hidden');
+    const smallUnitLabel = shape === 'أخرى' ? 'وحدة فردية' : UNIT_LABELS[smallUnit];
+
+    if (supportsStrip) {
       document.getElementById('field3_wrap').classList.remove('hidden');
-      document.getElementById('field3_label').textContent = '3) العلبة فيها كام شريط؟';
-      document.getElementById('field4_label').textContent = '4) ' + cfg.field4Label;
+      document.getElementById('field3_label').textContent = 'العلبة فيها كام شريط؟';
+      document.getElementById('field4_wrap').classList.remove('hidden');
+      document.getElementById('field4_label').textContent = 'الشريط فيه كام حبة؟';
       document.getElementById('leftover_medium_wrap').classList.remove('hidden');
       document.getElementById('leftover_medium_label').textContent = 'زيادة برّه العلب: كام شريط لوحده؟';
     } else {
@@ -241,13 +351,8 @@
       document.getElementById('p_field3').value = 1;
       document.getElementById('leftover_medium_wrap').classList.add('hidden');
       document.getElementById('p_leftover_medium').value = 0;
-      if (cfg.field4Label) {
-        document.getElementById('field4_wrap').classList.remove('hidden');
-        document.getElementById('field4_label').textContent = '4) ' + cfg.field4Label;
-      } else {
-        document.getElementById('field4_wrap').classList.add('hidden');
-        document.getElementById('p_field4').value = 1;
-      }
+      document.getElementById('field4_wrap').classList.remove('hidden');
+      document.getElementById('field4_label').textContent = 'العلبة فيها كام ' + smallUnitLabel + '؟';
     }
     document.getElementById('leftover_small_label').textContent = 'زيادة فردية: كام ' + smallUnitLabel + ' لوحدها؟';
   }
@@ -259,17 +364,23 @@
     const saveBtn = document.getElementById('saveBtn');
 
     const name = document.getElementById('p_name').value.trim();
+    const nameEn = document.getElementById('p_name_en').value.trim();
+    const drugType = document.getElementById('p_drug_type').value;
     const shape = document.getElementById('p_shape').value;
-    const cfg = SHAPE_CONFIG[shape];
+    const classification = document.getElementById('p_classification').value || null;
+    const activeIngredient = document.getElementById('p_active_ingredient').value.trim() || null;
+    const concentration = document.getElementById('p_concentration').value.trim() || null;
+    const retailAllowed = document.getElementById('p_retail_allowed').value === 'yes';
     const otherShapeNote = document.getElementById('p_other_shape_note').value.trim();
 
-    const field3 = parseInt(document.getElementById('p_field3').value) || 1; // علبة -> شريط
-    const field4 = parseInt(document.getElementById('p_field4').value) || 1; // شريط -> فردي
+    const supportsStrip = STRIP_SHAPES.includes(shape);
+    const field3 = retailAllowed ? (parseInt(document.getElementById('p_field3').value) || 1) : 1;
+    const field4 = retailAllowed ? (parseInt(document.getElementById('p_field4').value) || 1) : 1;
 
     const boxPrice = document.getElementById('p_box_price').value;
     const boxesQty = parseFloat(document.getElementById('p_boxes_qty').value) || 0;
-    const leftoverMedium = parseFloat(document.getElementById('p_leftover_medium').value) || 0;
-    const leftoverSmall = parseFloat(document.getElementById('p_leftover_small').value) || 0;
+    const leftoverMedium = retailAllowed ? (parseFloat(document.getElementById('p_leftover_medium').value) || 0) : 0;
+    const leftoverSmall = retailAllowed ? (parseFloat(document.getElementById('p_leftover_small').value) || 0) : 0;
     const expiryDate = document.getElementById('p_expiry_date').value || null;
     const minThreshold = parseFloat(document.getElementById('p_min_threshold').value) || 0;
     const purchasePriceRaw = document.getElementById('p_purchase_price').value;
@@ -281,14 +392,20 @@
     saveBtn.textContent = 'جاري الحفظ...';
 
     try {
-      const useThreeLevels = cfg.showField3 && field3 > 1;
+      const useThreeLevels = retailAllowed && supportsStrip && field3 > 1;
       const productPayload = {
         name,
+        name_en: nameEn || null,
+        drug_type: drugType,
+        classification,
+        active_ingredient: activeIngredient,
+        concentration,
+        retail_allowed: retailAllowed,
         unit_large: useThreeLevels ? 'box' : null,
         unit_large_to_medium: useThreeLevels ? field3 : null,
         unit_medium: useThreeLevels ? 'strip' : 'box',
         unit_medium_to_small: field4,
-        unit_small: shape === 'أخرى' ? 'other' : cfg.small,
+        unit_small: shape === 'أخرى' ? 'other' : getSmallUnitFor(shape),
         other_note: (shape === 'أخرى' ? otherShapeNote : null),
         expiry_date: expiryDate,
         min_stock_threshold: minThreshold,
@@ -355,7 +472,13 @@
     document.getElementById('saveBtn').textContent = 'حفظ المنتج';
     document.getElementById('cancelEditBtn').classList.add('hidden');
     document.getElementById('p_name').value = '';
-    document.getElementById('p_shape').value = 'برشام';
+    document.getElementById('p_name_en').value = '';
+    document.getElementById('p_drug_type').selectedIndex = 0;
+    updateShapeOptionsForType();
+    document.getElementById('p_classification').value = '';
+    document.getElementById('p_active_ingredient').value = '';
+    document.getElementById('p_concentration').value = '';
+    document.getElementById('p_retail_allowed').value = 'no';
     document.getElementById('p_other_shape_note').value = '';
     document.getElementById('p_field3').value = 1;
     document.getElementById('p_field4').value = 1;
@@ -496,7 +619,7 @@
     const wrap = document.getElementById('tableWrap');
     const { data: products, error } = await sb
       .from('products')
-      .select('id, name, shape, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit)')
+      .select('id, name, name_en, shape, drug_type, classification, active_ingredient, concentration, retail_allowed, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -520,7 +643,16 @@
   function renderInventoryTable(searchText) {
     const wrap = document.getElementById('tableWrap');
     const term = (searchText || '').trim().toLowerCase();
-    const products = (window._productsCache || []).filter(p => !term || p.name.toLowerCase().includes(term));
+    const shapeFilter = document.getElementById('filterShape').value;
+    const typeFilter = document.getElementById('filterType').value;
+    const classFilter = document.getElementById('filterClass').value;
+
+    const products = (window._productsCache || []).filter(p =>
+      (!term || p.name.toLowerCase().includes(term) || (p.name_en || '').toLowerCase().includes(term)) &&
+      (!shapeFilter || p.shape === shapeFilter) &&
+      (!typeFilter || p.drug_type === typeFilter) &&
+      (!classFilter || p.classification === classFilter)
+    );
 
     if (products.length === 0) {
       wrap.innerHTML = '<p class="loading">' + (term ? 'مفيش منتج مطابق للبحث' : 'لا توجد منتجات مضافة بعد') + '</p>';
@@ -588,7 +720,14 @@
     document.getElementById('cancelEditBtn').classList.remove('hidden');
 
     document.getElementById('p_name').value = p.name;
-    document.getElementById('p_shape').value = p.shape && SHAPE_CONFIG[p.shape] ? p.shape : 'أخرى';
+    document.getElementById('p_name_en').value = p.name_en || '';
+    document.getElementById('p_drug_type').value = p.drug_type || customOptions.drug_type[0]?.value || '';
+    updateShapeOptionsForType();
+    document.getElementById('p_shape').value = p.shape || '';
+    document.getElementById('p_classification').value = p.classification || '';
+    document.getElementById('p_active_ingredient').value = p.active_ingredient || '';
+    document.getElementById('p_concentration').value = p.concentration || '';
+    document.getElementById('p_retail_allowed').value = p.retail_allowed ? 'yes' : 'no';
     document.getElementById('p_other_shape_note').value = p.other_note || '';
     document.getElementById('p_field3').value = p.unit_large_to_medium || 1;
     document.getElementById('p_field4').value = p.unit_medium_to_small || 1;
@@ -628,7 +767,7 @@
   document.getElementById('exportBtn').addEventListener('click', async () => {
     const { data: products, error } = await sb
       .from('products')
-      .select('id, name, shape, qr_code, expiry_date, default_sale_price, inventory(quantity_smallest_unit), unit_large_to_medium, unit_medium_to_small');
+      .select('id, name, name_en, shape, drug_type, classification, active_ingredient, concentration, qr_code, expiry_date, default_sale_price, inventory(quantity_smallest_unit), unit_large_to_medium, unit_medium_to_small');
     if (error) { alert('تعذّر التصدير: ' + error.message); return; }
 
     let costsMap = {};
@@ -639,16 +778,24 @@
 
     const rows = (products || []).map(p => {
       const qty = getInvQty(p);
-      const perBox = (p.unit_large_to_medium || 1) * (p.unit_medium_to_small || 1);
+      const field3 = p.unit_large_to_medium || 1;
+      const field4 = p.unit_medium_to_small || 1;
+      const perBox = field3 * field4;
       const row = {
-        'اسم الصنف': p.name,
-        'النوع': p.shape || '',
-        'كام قرص/كيس/أمبول في العلبة': (p.unit_large_to_medium || 1) * (p.unit_medium_to_small || 1),
-        'الكمية (وحدة فردية)': qty,
-        'الكمية (عدد علب)': perBox > 0 ? (qty / perBox).toFixed(2) : qty,
-        'سعر البيع (للعلبة)': p.default_sale_price || '',
+        'الاسم العربي': p.name,
+        'English Name': p.name_en || '',
         'تاريخ انتهاء الصلاحية': p.expiry_date || '',
-        'باركود': p.qr_code || ''
+        'المادة الفعالة': p.active_ingredient || '',
+        'التركيز': p.concentration || '',
+        'نوع الصنف': p.drug_type || '',
+        'الشكل الدوائي': p.shape || '',
+        'التصنيف': p.classification || '',
+        'عدد العلب': perBox > 0 ? (qty / perBox).toFixed(2) : qty,
+        'شرائط/علبة': field3,
+        'حبات/شريط': field4,
+        'إجمالي الحبات/العلبة': perBox,
+        'الباركود': p.qr_code || '',
+        'السعر': p.default_sale_price || ''
       };
       if (isAdmin) row['سعر الشراء (للعلبة)'] = costsMap[p.id] || '';
       return row;
@@ -665,14 +812,20 @@
   // ------------------------------------------------------------
   document.getElementById('templateBtn').addEventListener('click', () => {
     const sample = [{
-      'اسم الصنف': 'مثال: بانادول',
-      'النوع': 'برشام',
-      'كام قرص/كيس/أمبول في العلبة': 20,
-      'الكمية (عدد علب)': 5,
-      'سعر البيع (للعلبة)': 25,
-      'سعر الشراء (للعلبة)': 18,
-      'تاريخ انتهاء الصلاحية': '2027-01-01',
-      'باركود': ''
+      'الاسم العربي': 'مثال: أماريل',
+      'English Name': 'Amaryl 1mg',
+      'تاريخ انتهاء الصلاحية': '2028-10-01',
+      'المادة الفعالة': 'Glimepiride',
+      'التركيز': '1 mg',
+      'نوع الصنف': 'أدوية',
+      'الشكل الدوائي': 'قرص',
+      'التصنيف': 'مضاد للسكري',
+      'عدد العلب': 5,
+      'شرائط/علبة': 3,
+      'حبات/شريط': 10,
+      'إجمالي الحبات/العلبة': 30,
+      'الباركود': '',
+      'السعر': 40
     }];
     const ws = XLSX.utils.json_to_sheet(sample);
     const wb = XLSX.utils.book_new();
@@ -703,8 +856,8 @@
 
       let successCount = 0;
       let errorRows = [];
+      let newOptionsToAdd = [];
 
-      // بتاخد قيمة عمود حتى لو فيه مسافات زيادة أو اختلاف بسيط في الاسم
       function getCol(row, ...possibleNames) {
         const cleanRow = {};
         for (const key in row) cleanRow[key.trim()] = row[key];
@@ -714,67 +867,94 @@
         return null;
       }
 
+      function parseExcelDate(expiryDate) {
+        if (expiryDate instanceof Date) return expiryDate.toISOString().split('T')[0];
+        if (typeof expiryDate === 'number') {
+          const parsed = XLSX.SSF.parse_date_code(expiryDate);
+          return parsed ? `${parsed.y}-${String(parsed.m).padStart(2,'0')}-${String(parsed.d).padStart(2,'0')}` : null;
+        }
+        if (typeof expiryDate === 'string' && expiryDate.trim()) {
+          const s = expiryDate.trim();
+          const mmYyyy = s.match(/^(\d{1,2})\/(\d{4})$/);
+          const ddMmYyyy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          const isoLike = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+          if (mmYyyy) return `${mmYyyy[2]}-${mmYyyy[1].padStart(2,'0')}-01`;
+          if (ddMmYyyy) return `${ddMmYyyy[3]}-${ddMmYyyy[2].padStart(2,'0')}-${ddMmYyyy[1].padStart(2,'0')}`;
+          if (isoLike) return `${isoLike[1]}-${isoLike[2].padStart(2,'0')}-${isoLike[3].padStart(2,'0')}`;
+          return null;
+        }
+        return null;
+      }
+
       for (const row of rows) {
-        const name = getCol(row, 'اسم الصنف', 'الاسم', 'اسم المنتج', 'name');
+        const name = getCol(row, 'الاسم العربي', 'اسم الصنف', 'الاسم', 'name');
         if (!name) { errorRows.push('(صف بدون اسم صنف - اتجاهل)'); continue; }
 
-        const shape = getCol(row, 'النوع', 'الشكل') || 'أخرى';
-        const cfg = SHAPE_CONFIG[shape] || SHAPE_CONFIG['أخرى'];
-        const salePrice = getCol(row, 'سعر البيع (للعلبة)', 'سعر البيع', 'السعر');
+        const nameEn = getCol(row, 'English Name', 'الاسم بالانجليزي');
+        const activeIngredient = getCol(row, 'المادة الفعالة');
+        const concentration = getCol(row, 'التركيز');
+        const drugType = getCol(row, 'نوع الصنف') || 'أدوية';
+        const shape = getCol(row, 'الشكل الدوائي', 'النوع', 'الشكل') || 'أخرى';
+        const classification = getCol(row, 'التصنيف');
+        const salePrice = getCol(row, 'السعر', 'سعر البيع (للعلبة)', 'سعر البيع');
         const purchasePrice = getCol(row, 'سعر الشراء (للعلبة)', 'سعر الشراء');
-        const boxesQty = parseFloat(getCol(row, 'الكمية (عدد علب)', 'الكمية', 'عدد العلب') || 0) || 0;
-        const unitsPerBox = parseInt(getCol(row, 'كام قرص/كيس/أمبول في العلبة', 'عدد الوحدات في العلبة') || 1) || 1;
-        const barcode = getCol(row, 'باركود', 'الباركود', 'كود QR', 'QR');
-        let expiryDate = getCol(row, 'تاريخ انتهاء الصلاحية', 'تاريخ الانتهاء');
-        if (expiryDate instanceof Date) {
-          expiryDate = expiryDate.toISOString().split('T')[0];
-        } else if (typeof expiryDate === 'number') {
-          // تاريخ إكسيل رقمي
-          const parsed = XLSX.SSF.parse_date_code(expiryDate);
-          expiryDate = parsed ? `${parsed.y}-${String(parsed.m).padStart(2,'0')}-${String(parsed.d).padStart(2,'0')}` : null;
-        } else if (typeof expiryDate === 'string' && expiryDate.trim()) {
-          const s = expiryDate.trim();
-          const mmYyyy = s.match(/^(\d{1,2})\/(\d{4})$/);           // 12/2028
-          const ddMmYyyy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); // 01/12/2028
-          const isoLike = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);    // 2028-12-01
-          if (mmYyyy) {
-            expiryDate = `${mmYyyy[2]}-${mmYyyy[1].padStart(2,'0')}-01`;
-          } else if (ddMmYyyy) {
-            expiryDate = `${ddMmYyyy[3]}-${ddMmYyyy[2].padStart(2,'0')}-${ddMmYyyy[1].padStart(2,'0')}`;
-          } else if (isoLike) {
-            expiryDate = `${isoLike[1]}-${isoLike[2].padStart(2,'0')}-${isoLike[3].padStart(2,'0')}`;
-          } else {
-            expiryDate = null; // صيغة غير مفهومة، نسيبها فاضية بدل ما نفشل الصنف كله
-          }
-        } else {
-          expiryDate = null;
-        }
+        const boxesQty = parseFloat(getCol(row, 'عدد العلب', 'الكمية (عدد علب)', 'الكمية') || 0) || 0;
+        const stripsPerBox = parseInt(getCol(row, 'شرائط/علبة') || 1) || 1;
+        const pillsPerStrip = parseInt(getCol(row, 'حبات/شريط', 'كام قرص/كيس/أمبول في العلبة') || 1) || 1;
+        const barcode = getCol(row, 'الباركود', 'باركود', 'كود QR');
+        const expiryDate = parseExcelDate(getCol(row, 'تاريخ انتهاء الصلاحية', 'تاريخ الانتهاء'));
+
+        // 3 مستويات لو فيه أكتر من شريط في العلبة، وإلا مستويين بس
+        const useThreeLevels = stripsPerBox > 1;
+        const retailAllowed = pillsPerStrip > 1 || stripsPerBox > 1;
 
         try {
           const { data: product, error: prodErr } = await sb.from('products').insert({
             name: String(name).trim(),
-            shape: shape,
-            unit_large: null,
-            unit_large_to_medium: null,
-            unit_medium: 'box',
-            unit_medium_to_small: unitsPerBox,
-            unit_small: shape === 'أخرى' ? 'other' : cfg.small,
+            name_en: nameEn ? String(nameEn).trim() : null,
+            active_ingredient: activeIngredient ? String(activeIngredient).trim() : null,
+            concentration: concentration ? String(concentration).trim() : null,
+            drug_type: String(drugType).trim(),
+            shape: String(shape).trim(),
+            classification: classification ? String(classification).trim() : null,
+            retail_allowed: retailAllowed,
+            unit_large: useThreeLevels ? 'box' : null,
+            unit_large_to_medium: useThreeLevels ? stripsPerBox : null,
+            unit_medium: useThreeLevels ? 'strip' : 'box',
+            unit_medium_to_small: pillsPerStrip,
+            unit_small: getSmallUnitFor(shape),
             default_sale_price: salePrice ? parseFloat(salePrice) : null,
             expiry_date: expiryDate,
-            qr_code: barcode || null,
+            qr_code: barcode ? String(barcode) : null,
             created_by: currentUser.id
           }).select().single();
           if (prodErr) throw prodErr;
 
-          await sb.from('inventory').insert({ product_id: product.id, quantity_smallest_unit: boxesQty * unitsPerBox });
+          const totalPerBox = (useThreeLevels ? stripsPerBox : 1) * pillsPerStrip;
+          await sb.from('inventory').insert({ product_id: product.id, quantity_smallest_unit: boxesQty * totalPerBox });
 
           if (isAdmin && purchasePrice) {
             await sb.from('product_costs').upsert({ product_id: product.id, purchase_price: parseFloat(purchasePrice), updated_by: currentUser.id });
           }
+
+          // نسجّل الشكل/التصنيف الجديد في قايمة الاختيارات لو مش موجود قبل كده
+          if (shape && !customOptions.drug_shape.some(o => o.value === shape && o.parent === drugType)) {
+            newOptionsToAdd.push({ category: 'drug_shape', parent: String(drugType).trim(), value: String(shape).trim() });
+          }
+          if (classification && !customOptions.classification.some(o => o.value === classification)) {
+            newOptionsToAdd.push({ category: 'classification', parent: null, value: String(classification).trim() });
+          }
+
           successCount++;
         } catch (err) {
           errorRows.push(name + ': ' + err.message);
         }
+      }
+
+      // نضيف أي أشكال/تصنيفات جديدة ظهرت في الشيت للقايمة تلقائيًا (بدون تكرار)
+      if (newOptionsToAdd.length) {
+        const unique = Array.from(new Map(newOptionsToAdd.map(o => [o.category + '|' + o.parent + '|' + o.value, o])).values());
+        await sb.from('custom_options').upsert(unique, { onConflict: 'category,parent,value', ignoreDuplicates: true });
       }
 
       importMsg.textContent = 'تم استيراد ' + successCount + ' صنف بنجاح' + (errorRows.length ? (' — فشل ' + errorRows.length + ' صنف') : '');
@@ -787,6 +967,7 @@
       }
 
       try {
+        await loadCustomOptions();
         await loadInventory();
       } catch (refreshErr) {
         console.log('تعذّر تحديث عرض الجدول بعد الاستيراد:', refreshErr);

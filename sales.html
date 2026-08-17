@@ -87,6 +87,7 @@
   <a href="shortages.html">النواقص</a>
   <a href="expenses.html">المصروفات</a>
   <a href="profit.html">الأرباح</a>
+  <a href="search.html">🔍 بحث الأدوية</a>
   <a href="users.html">الإعدادات</a>
 </nav>
 
@@ -193,10 +194,10 @@
 
 <div id="scanModal" class="scan-modal hidden">
   <div class="scan-box">
-    <p class="scan-msg">وجّه الكاميرا على الباركود أو كود QR</p>
+    <p class="scan-msg">وجّه الكاميرا على كل باركود، هيتضاف تلقائي للسلة والكاميرا هتفضل شغالة للصنف اللي بعده</p>
     <video id="scanVideo"></video>
     <p class="scan-msg" id="scanStatus"></p>
-    <button type="button" id="closeScanBtn" class="secondary" style="width:100%;margin-top:10px;">إلغاء</button>
+    <button type="button" id="closeScanBtn" class="secondary" style="width:100%;margin-top:10px;">✅ خلصت، اقفل المسح</button>
   </div>
 </div>
 
@@ -218,16 +219,46 @@
   document.getElementById('scanBtn').addEventListener('click', startScan);
   document.getElementById('closeScanBtn').addEventListener('click', stopScan);
 
+  let lastScannedCode = null;
+  let lastScannedTime = 0;
+
   function handleScanResult(code) {
-    stopScan();
+    const now = Date.now();
+    if (code === lastScannedCode && (now - lastScannedTime) < 2500) return; // منع تكرار نفس الكود سريعًا
+    lastScannedCode = code;
+    lastScannedTime = now;
+
+    const status = document.getElementById('scanStatus');
     const match = productsCache.find(p => p.qr_code === code);
-    if (match) {
-      document.getElementById('s_product').value = match.id;
-      updateUnitOptions();
-      showSellMsg('تم التعرف على المنتج: ' + match.name, 'ok');
-    } else {
-      showSellMsg('الكود ده مش متسجّل لأي منتج في المخزون', 'error');
+
+    if (!match) {
+      status.textContent = '❌ الكود ده مش متسجّل لأي منتج';
+      return; // نفضل نمسح، من غير ما نقفل
     }
+
+    const currentInCart = cart.filter(c => c.product_id === match.id).reduce((s, c) => s + c.smallQty, 0);
+    const currentStock = getInvQty(match);
+    if (currentInCart + 1 > currentStock) {
+      status.textContent = '⚠️ "' + match.name + '" خلص من المخزون';
+      return;
+    }
+
+    const pricePerSmall = match.default_sale_price
+      ? match.default_sale_price / ((match.unit_large_to_medium || 1) * (match.unit_medium_to_small || 1))
+      : 0;
+
+    cart.push({
+      product_id: match.id,
+      name: match.name,
+      unit_sold: match.unit_small,
+      unit_label: unitLabel(match, 'small'),
+      quantity: 1,
+      smallQty: 1,
+      price: pricePerSmall
+    });
+    renderCart();
+
+    status.textContent = '✅ اتضاف: ' + match.name + ' — إجمالي السلة: ' + cart.length + ' صنف';
   }
 
   async function startScan() {
@@ -358,6 +389,13 @@
     await loadProducts();
     await loadCustomers();
     await loadRecentSales();
+
+    const params = new URLSearchParams(window.location.search);
+    const preselectId = params.get('product');
+    if (preselectId && getProduct(preselectId)) {
+      document.getElementById('s_product').value = preselectId;
+      updateUnitOptions();
+    }
   })();
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -368,7 +406,7 @@
   async function loadProducts() {
     const { data, error } = await sb
       .from('products')
-      .select('id, name, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, other_note, default_sale_price, inventory(quantity_smallest_unit)')
+      .select('id, name, name_en, shape, retail_allowed, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, other_note, default_sale_price, inventory(quantity_smallest_unit)')
       .order('name');
     if (error) return;
     productsCache = data || [];
@@ -419,12 +457,20 @@
 
     const qty = getInvQty(p);
 
-    unitSel.innerHTML += '<option value="small">' + unitLabel(p, 'small') + ' (فردي)</option>';
-    if ((p.unit_medium_to_small || 1) > 1 || p.unit_medium !== p.unit_small) {
-      unitSel.innerHTML += '<option value="medium">' + unitLabel(p, 'medium') + '</option>';
-    }
-    if (p.unit_large) {
-      unitSel.innerHTML += '<option value="large">' + unitLabel(p, 'large') + '</option>';
+    if (p.retail_allowed) {
+      unitSel.innerHTML += '<option value="small">' + unitLabel(p, 'small') + ' (فردي)</option>';
+      if ((p.unit_medium_to_small || 1) > 1 || p.unit_medium !== p.unit_small) {
+        unitSel.innerHTML += '<option value="medium">' + unitLabel(p, 'medium') + '</option>';
+      }
+      if (p.unit_large) {
+        unitSel.innerHTML += '<option value="large">' + unitLabel(p, 'large') + '</option>';
+      }
+    } else {
+      // مش قابل للبيع بالتجزئة: خيار "العلبة الكاملة" بس، قاعدة صارمة
+      unitSel.innerHTML += '<option value="small">علبة كاملة</option>';
+      hint.textContent = 'ده صنف مش بيتباع بالتجزئة — بيتباع علبة كاملة بس. المتاح: ' + qty + ' علبة';
+      recalcPrice();
+      return;
     }
 
     hint.textContent = 'المتاح حاليًا: ' + qty + ' ' + unitLabel(p, 'small');

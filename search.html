@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>بحث الأدوية - نظام إدارة الصيدلية</title>
+<script src="supabase-lib.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f1b16; color: #eef2ef; padding: 16px; padding-bottom: 60px; }
+  header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+  header h1 { font-size: 18px; color: #6fcf97; }
+  header .userinfo { font-size: 12px; color: #9fb3a8; }
+  nav { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+  nav a { padding: 8px 14px; background: #16261e; border: 1px solid #23392c; border-radius: 8px; color: #eef2ef; text-decoration: none; font-size: 13px; }
+  nav a.active { background: #6fcf97; color: #0f1b16; font-weight: 600; }
+  .card { background: #16261e; border: 1px solid #23392c; border-radius: 14px; padding: 20px; margin-bottom: 20px; }
+  label { display: block; font-size: 12px; color: #b7c9be; margin-bottom: 4px; }
+  input, select { width: 100%; padding: 10px 12px; background: #0f1b16; border: 1px solid #2a4536; border-radius: 8px; color: #eef2ef; font-size: 14px; margin-bottom: 12px; }
+  .filters-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .loading { text-align: center; color: #9fb3a8; padding: 20px; }
+  .result-card { background: #16261e; border: 1px solid #23392c; border-radius: 12px; padding: 16px; margin-bottom: 12px; }
+  .result-name-en { font-size: 16px; font-weight: 700; color: #eef2ef; }
+  .result-name-ar { font-size: 13px; color: #9fb3a8; margin-bottom: 8px; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin: 8px 0; }
+  .tag { background: #23392c; color: #b7c9be; font-size: 11px; padding: 4px 10px; border-radius: 20px; }
+  .active-ingredient { font-size: 13px; color: #6fcf97; margin-bottom: 4px; }
+  .stock-line { font-size: 13px; margin: 8px 0; display: flex; justify-content: space-between; align-items: center; }
+  .available { color: #6fcf97; font-weight: 600; }
+  .unavailable { color: #f28b82; font-weight: 600; }
+  button { padding: 10px 16px; background: #6fcf97; color: #0f1b16; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+  button.secondary { background: #23392c; color: #eef2ef; }
+  button.small { padding: 6px 12px; font-size: 12px; }
+  .substitutes-box { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #2a4536; }
+  .substitutes-title { font-size: 12px; color: #f2c94c; margin-bottom: 6px; }
+  .sub-item { display: flex; justify-content: space-between; align-items: center; font-size: 13px; padding: 6px 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📦 نظام إدارة الصيدلية</h1>
+  <div>
+    <span class="userinfo" id="userinfo"></span>
+    <button id="logoutBtn" class="small secondary" style="margin-right:8px;">خروج</button>
+  </div>
+</header>
+
+<nav>
+  <a href="inventory.html">المخزون</a>
+  <a href="sales.html">المبيعات</a>
+  <a href="shortages.html">النواقص</a>
+  <a href="expenses.html">المصروفات</a>
+  <a href="profit.html">الأرباح</a>
+  <a href="search.html" class="active">🔍 بحث الأدوية</a>
+  <a href="users.html">⚙️ الإعدادات</a>
+</nav>
+
+<div class="card">
+  <label>🔍 ابحث بالاسم (عربي/إنجليزي) أو المادة الفعالة</label>
+  <input type="text" id="searchInput" placeholder="مثال: Augmentin أو أوجمنتين أو Amoxicillin">
+
+  <div class="filters-grid">
+    <div>
+      <label>التوفر</label>
+      <select id="filterAvailability">
+        <option value="">الكل</option>
+        <option value="available">متوفر</option>
+        <option value="unavailable">غير متوفر</option>
+      </select>
+    </div>
+    <div>
+      <label>النوع</label>
+      <select id="filterType"><option value="">كل الأنواع</option></select>
+    </div>
+    <div>
+      <label>الشكل الدوائي</label>
+      <select id="filterShape"><option value="">كل الأشكال</option></select>
+    </div>
+    <div>
+      <label>التصنيف</label>
+      <select id="filterClass"><option value="">كل التصنيفات</option></select>
+    </div>
+  </div>
+</div>
+
+<div id="resultsWrap"><p class="loading">جاري التحميل...</p></div>
+
+<script src="config.js"></script>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">JS Error: ' + msg + ' (line ' + line + ')</div>');
+  };
+  window.onunhandledrejection = function(e) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>');
+  };
+
+  let allProducts = [];
+
+  (async () => {
+    const auth = await requireAuth();
+    if (!auth) return;
+    document.getElementById('userinfo').textContent =
+      auth.profile.full_name + ' (' + (auth.profile.role === 'admin' ? 'أدمن' : 'موظف') + ')';
+
+    await loadFilters();
+    await loadProducts();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  async function loadFilters() {
+    const { data } = await sb.from('custom_options').select('category, parent, value').order('value');
+    const types = (data || []).filter(o => o.category === 'drug_type');
+    const shapes = (data || []).filter(o => o.category === 'drug_shape');
+    const classes = (data || []).filter(o => o.category === 'classification');
+
+    document.getElementById('filterType').innerHTML = '<option value="">كل الأنواع</option>' +
+      types.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+    document.getElementById('filterShape').innerHTML = '<option value="">كل الأشكال</option>' +
+      [...new Map(shapes.map(o => [o.value, o])).values()].map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+    document.getElementById('filterClass').innerHTML = '<option value="">كل التصنيفات</option>' +
+      classes.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+  }
+
+  async function loadProducts() {
+    const { data, error } = await sb
+      .from('products')
+      .select('id, name, name_en, shape, drug_type, classification, active_ingredient, concentration, retail_allowed, default_sale_price, min_stock_threshold, unit_large_to_medium, unit_medium_to_small, unit_small, other_note, inventory(quantity_smallest_unit)')
+      .order('name_en');
+    if (error) {
+      document.getElementById('resultsWrap').innerHTML = '<p style="color:#f28b82;">تعذّر التحميل: ' + error.message + '</p>';
+      return;
+    }
+    allProducts = data || [];
+    renderResults();
+  }
+
+  [document.getElementById('searchInput'), document.getElementById('filterAvailability'),
+   document.getElementById('filterType'), document.getElementById('filterShape'), document.getElementById('filterClass')]
+    .forEach(el => el.addEventListener('input', renderResults));
+
+  function getQty(p) {
+    if (!p.inventory) return 0;
+    const row = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
+    return row ? row.quantity_smallest_unit : 0;
+  }
+
+  function renderResults() {
+    const term = document.getElementById('searchInput').value.trim().toLowerCase();
+    const availability = document.getElementById('filterAvailability').value;
+    const typeFilter = document.getElementById('filterType').value;
+    const shapeFilter = document.getElementById('filterShape').value;
+    const classFilter = document.getElementById('filterClass').value;
+
+    const filtered = allProducts.filter(p => {
+      const qty = getQty(p);
+      const isAvailable = qty > (p.min_stock_threshold || 0);
+      if (term) {
+        const hay = ((p.name || '') + ' ' + (p.name_en || '') + ' ' + (p.active_ingredient || '')).toLowerCase();
+        if (!hay.includes(term)) return false;
+      }
+      if (availability === 'available' && !isAvailable) return false;
+      if (availability === 'unavailable' && isAvailable) return false;
+      if (typeFilter && p.drug_type !== typeFilter) return false;
+      if (shapeFilter && p.shape !== shapeFilter) return false;
+      if (classFilter && p.classification !== classFilter) return false;
+      return true;
+    });
+
+    const wrap = document.getElementById('resultsWrap');
+    if (filtered.length === 0) {
+      wrap.innerHTML = '<p class="loading">مفيش نتائج مطابقة</p>';
+      return;
+    }
+
+    wrap.innerHTML = filtered.slice(0, 100).map(p => renderCard(p)).join('');
+  }
+
+  function renderCard(p) {
+    const qty = getQty(p);
+    const isAvailable = qty > (p.min_stock_threshold || 0);
+    const displayName = p.name_en || p.name;
+
+    let substitutesHtml = '';
+    if (p.active_ingredient) {
+      const substitutes = allProducts.filter(s =>
+        s.id !== p.id &&
+        s.active_ingredient &&
+        s.active_ingredient.toLowerCase() === p.active_ingredient.toLowerCase()
+      ).sort((a, b) => (getQty(b) > (b.min_stock_threshold||0) ? 1 : 0) - (getQty(a) > (a.min_stock_threshold||0) ? 1 : 0));
+
+      if (substitutes.length > 0) {
+        substitutesHtml = '<div class="substitutes-box"><div class="substitutes-title">💊 بدائل (نفس المادة الفعالة):</div>' +
+          substitutes.slice(0, 5).map(s => {
+            const sQty = getQty(s);
+            const sAvail = sQty > (s.min_stock_threshold || 0);
+            return '<div class="sub-item"><span>' + escapeHtml(s.name_en || s.name) +
+              (s.concentration ? ' (' + escapeHtml(s.concentration) + ')' : '') + '</span>' +
+              '<span class="' + (sAvail ? 'available' : 'unavailable') + '">' + (sAvail ? 'متوفر' : 'غير متوفر') + '</span></div>';
+          }).join('') + '</div>';
+      }
+    }
+
+    return '<div class="result-card">' +
+      '<div class="result-name-en">' + escapeHtml(displayName) + '</div>' +
+      (p.name_en && p.name ? '<div class="result-name-ar">' + escapeHtml(p.name) + '</div>' : '') +
+      (p.active_ingredient ? '<div class="active-ingredient">' + escapeHtml(p.active_ingredient) + (p.concentration ? ' — ' + escapeHtml(p.concentration) : '') + '</div>' : '') +
+      '<div class="tags">' +
+        (p.drug_type ? '<span class="tag">' + escapeHtml(p.drug_type) + '</span>' : '') +
+        (p.shape ? '<span class="tag">' + escapeHtml(p.shape) + '</span>' : '') +
+        (p.classification ? '<span class="tag">' + escapeHtml(p.classification) + '</span>' : '') +
+      '</div>' +
+      '<div class="stock-line">' +
+        '<span class="' + (isAvailable ? 'available' : 'unavailable') + '">' + (isAvailable ? '✅ متوفر' : '❌ غير متوفر') + '</span>' +
+        (p.default_sale_price ? '<span>' + p.default_sale_price + ' ج</span>' : '') +
+      '</div>' +
+      '<button onclick="sellThis(\'' + p.id + '\')" ' + (isAvailable ? '' : 'disabled') + '>🛒 بيع</button>' +
+      substitutesHtml +
+    '</div>';
+  }
+
+  window.sellThis = function(id) {
+    window.location.href = 'sales.html?product=' + id;
+  };
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+</script>
+
+</body>
+</html>
