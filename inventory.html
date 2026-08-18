@@ -181,6 +181,12 @@
     <select id="filterShape" style="width:auto;margin-bottom:0;"><option value="">كل الأشكال</option></select>
     <select id="filterType" style="width:auto;margin-bottom:0;"><option value="">كل الأنواع</option></select>
     <select id="filterClass" style="width:auto;margin-bottom:0;"><option value="">كل التصنيفات</option></select>
+    <select id="filterAvailability" style="width:auto;margin-bottom:0;">
+      <option value="">كل الحالات</option>
+      <option value="available">متوفر</option>
+      <option value="unavailable">غير متوفر</option>
+      <option value="low">ناقص</option>
+    </select>
     <button type="button" id="exportBtn" class="secondary">⬇️ تصدير إكسيل</button>
     <button type="button" id="templateBtn" class="secondary">📄 نموذج فاضي للاستيراد</button>
     <button type="button" id="importBtn" class="secondary">⬆️ استيراد إكسيل</button>
@@ -286,6 +292,7 @@
   document.getElementById('filterShape').addEventListener('change', () => renderInventoryTable(document.getElementById('searchBox').value));
   document.getElementById('filterType').addEventListener('change', () => renderInventoryTable(document.getElementById('searchBox').value));
   document.getElementById('filterClass').addEventListener('change', () => renderInventoryTable(document.getElementById('searchBox').value));
+  document.getElementById('filterAvailability').addEventListener('change', () => renderInventoryTable(document.getElementById('searchBox').value));
 
   (async () => {
     const auth = await requireAuth();
@@ -302,6 +309,13 @@
     await loadCustomOptions();
     updateShapeFields();
     await loadInventory();
+
+    const params = new URLSearchParams(window.location.search);
+    const incomingSearch = params.get('search');
+    if (incomingSearch) {
+      document.getElementById('searchBox').value = incomingSearch;
+      renderInventoryTable(incomingSearch);
+    }
   })();
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
@@ -508,7 +522,23 @@
   document.getElementById('scanBtn').addEventListener('click', startScan);
   document.getElementById('closeScanBtn').addEventListener('click', stopScan);
 
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 1000;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e) { /* تجاهل لو المتصفح مانع الصوت */ }
+  }
+
   function handleScanResult(code) {
+    playBeep();
     document.getElementById('p_qr').value = code;
     const existing = (window._productsCache || []).find(p => p.qr_code === code);
     const status = document.getElementById('scanStatus');
@@ -640,19 +670,43 @@
     return (p.unit_large_to_medium || 1) * (p.unit_medium_to_small || 1);
   }
 
+  function normalizeForSearch(s) {
+    return (s || '').toString().toLowerCase().replace(/\s+/g, '');
+  }
+
+  function fuzzyIncludes(haystack, term) {
+    if (!term) return true;
+    const normHay = normalizeForSearch(haystack);
+    const normTerm = normalizeForSearch(term);
+    if (normHay.includes(normTerm)) return true;
+    const words = term.trim().split(/\s+/).filter(Boolean);
+    if (words.length > 1) return words.every(w => normHay.includes(normalizeForSearch(w)));
+    return false;
+  }
+
   function renderInventoryTable(searchText) {
     const wrap = document.getElementById('tableWrap');
-    const term = (searchText || '').trim().toLowerCase();
+    const term = (searchText || '').trim();
     const shapeFilter = document.getElementById('filterShape').value;
     const typeFilter = document.getElementById('filterType').value;
     const classFilter = document.getElementById('filterClass').value;
+    const availFilter = document.getElementById('filterAvailability').value;
 
-    const products = (window._productsCache || []).filter(p =>
-      (!term || p.name.toLowerCase().includes(term) || (p.name_en || '').toLowerCase().includes(term)) &&
-      (!shapeFilter || p.shape === shapeFilter) &&
-      (!typeFilter || p.drug_type === typeFilter) &&
-      (!classFilter || p.classification === classFilter)
-    );
+    const products = (window._productsCache || []).filter(p => {
+      const qty = getInvQty(p);
+      const threshold = p.min_stock_threshold || 0;
+      const isAvailable = qty > threshold;
+      const isLow = qty > 0 && qty <= threshold;
+
+      if (term && !fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term)) return false;
+      if (shapeFilter && p.shape !== shapeFilter) return false;
+      if (typeFilter && p.drug_type !== typeFilter) return false;
+      if (classFilter && p.classification !== classFilter) return false;
+      if (availFilter === 'available' && !isAvailable) return false;
+      if (availFilter === 'unavailable' && qty > 0) return false;
+      if (availFilter === 'low' && !isLow) return false;
+      return true;
+    });
 
     if (products.length === 0) {
       wrap.innerHTML = '<p class="loading">' + (term ? 'مفيش منتج مطابق للبحث' : 'لا توجد منتجات مضافة بعد') + '</p>';

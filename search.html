@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>بحث الأدوية - نظام إدارة الصيدلية</title>
 <script src="supabase-lib.js"></script>
+<script src="zxing-lib.js"></script>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { font-family: 'Segoe UI', Tahoma, sans-serif; background: #0f1b16; color: #eef2ef; padding: 16px; padding-bottom: 60px; }
@@ -60,6 +61,12 @@
   <label>🔍 ابحث بالاسم (عربي/إنجليزي) أو المادة الفعالة</label>
   <input type="text" id="searchInput" placeholder="مثال: Augmentin أو أوجمنتين أو Amoxicillin">
 
+  <label>📷 أو ابحث بالباركود</label>
+  <div style="display:flex;gap:8px;">
+    <input type="text" id="barcodeInput" placeholder="اكتب الباركود أو امسحه" style="margin-bottom:12px;">
+    <button type="button" id="scanBtn" class="secondary" style="white-space:nowrap;height:fit-content;">📷 مسح</button>
+  </div>
+
   <div class="filters-grid">
     <div>
       <label>التوفر</label>
@@ -67,6 +74,7 @@
         <option value="">الكل</option>
         <option value="available">متوفر</option>
         <option value="unavailable">غير متوفر</option>
+        <option value="low">ناقص (قرب يخلص)</option>
       </select>
     </div>
     <div>
@@ -85,6 +93,15 @@
 </div>
 
 <div id="resultsWrap"><p class="loading">جاري التحميل...</p></div>
+
+<div id="scanModal" class="scan-modal hidden" style="position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:1000;padding:20px;">
+  <div style="background:#16261e;border-radius:14px;padding:16px;max-width:420px;width:100%;">
+    <p style="font-size:13px;color:#9fb3a8;text-align:center;margin-bottom:10px;">وجّه الكاميرا على الباركود</p>
+    <video id="scanVideo" style="width:100%;border-radius:10px;background:#000;"></video>
+    <p id="scanStatus" style="font-size:13px;color:#9fb3a8;text-align:center;margin:10px 0;"></p>
+    <button type="button" id="closeScanBtn" class="secondary" style="width:100%;">إلغاء</button>
+  </div>
+</div>
 
 <script src="config.js"></script>
 <script>
@@ -107,12 +124,44 @@
 
     await loadFilters();
     await loadProducts();
+
+    // لو جينا من رابط فيه اسم بحث جاهز (زي زرار "عرض في المخزون" العكسي)
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('q')) {
+      document.getElementById('searchInput').value = params.get('q');
+      renderResults();
+    }
   })();
 
   document.getElementById('logoutBtn').addEventListener('click', async () => {
     await sb.auth.signOut();
     window.location.href = 'index.html';
   });
+
+  // نص يعتبر "فاضي/بلاسهولدر" مش قيمة حقيقية (زي "-----" أو "N/A")
+  function isPlaceholder(val) {
+    if (!val) return true;
+    const v = String(val).trim();
+    return v === '' || /^-+$/.test(v) || /^n\/?a$/i.test(v) || v === '.' || v === '،';
+  }
+
+  // مطابقة مرنة: بتشيل المسافات وبتقارن، عشان "بيتا ديرم" يطابق "بيتاديرم"
+  function normalizeForSearch(s) {
+    return (s || '').toString().toLowerCase().replace(/\s+/g, '');
+  }
+
+  function fuzzyIncludes(haystack, term) {
+    if (!term) return true;
+    const normHay = normalizeForSearch(haystack);
+    const normTerm = normalizeForSearch(term);
+    if (normHay.includes(normTerm)) return true;
+    // لو مطابقة المسافات فشلت، جرّب مطابقة كل كلمة لوحدها (بأي ترتيب)
+    const words = term.trim().split(/\s+/).filter(Boolean);
+    if (words.length > 1) {
+      return words.every(w => normalizeForSearch(haystack).includes(normalizeForSearch(w)));
+    }
+    return false;
+  }
 
   async function loadFilters() {
     const { data } = await sb.from('custom_options').select('category, parent, value').order('value');
@@ -131,7 +180,7 @@
   async function loadProducts() {
     const { data, error } = await sb
       .from('products')
-      .select('id, name, name_en, shape, drug_type, classification, active_ingredient, concentration, retail_allowed, default_sale_price, min_stock_threshold, unit_large_to_medium, unit_medium_to_small, unit_small, other_note, inventory(quantity_smallest_unit)')
+      .select('id, name, name_en, shape, drug_type, classification, active_ingredient, concentration, retail_allowed, qr_code, default_sale_price, min_stock_threshold, unit_large_to_medium, unit_medium_to_small, unit_small, other_note, inventory(quantity_smallest_unit)')
       .order('name_en');
     if (error) {
       document.getElementById('resultsWrap').innerHTML = '<p style="color:#f28b82;">تعذّر التحميل: ' + error.message + '</p>';
@@ -145,6 +194,14 @@
    document.getElementById('filterType'), document.getElementById('filterShape'), document.getElementById('filterClass')]
     .forEach(el => el.addEventListener('input', renderResults));
 
+  document.getElementById('barcodeInput').addEventListener('input', (e) => {
+    const code = e.target.value.trim();
+    if (!code) { renderResults(); return; }
+    const match = allProducts.find(p => p.qr_code === code);
+    const wrap = document.getElementById('resultsWrap');
+    wrap.innerHTML = match ? renderCard(match) : '<p class="loading">مفيش منتج مسجّل بالباركود ده</p>';
+  });
+
   function getQty(p) {
     if (!p.inventory) return 0;
     const row = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
@@ -152,7 +209,7 @@
   }
 
   function renderResults() {
-    const term = document.getElementById('searchInput').value.trim().toLowerCase();
+    const term = document.getElementById('searchInput').value.trim();
     const availability = document.getElementById('filterAvailability').value;
     const typeFilter = document.getElementById('filterType').value;
     const shapeFilter = document.getElementById('filterShape').value;
@@ -160,13 +217,17 @@
 
     const filtered = allProducts.filter(p => {
       const qty = getQty(p);
-      const isAvailable = qty > (p.min_stock_threshold || 0);
+      const threshold = p.min_stock_threshold || 0;
+      const isAvailable = qty > threshold;
+      const isLow = qty > 0 && qty <= threshold;
+
       if (term) {
-        const hay = ((p.name || '') + ' ' + (p.name_en || '') + ' ' + (p.active_ingredient || '')).toLowerCase();
-        if (!hay.includes(term)) return false;
+        const hay = (p.name || '') + ' ' + (p.name_en || '') + ' ' + (p.active_ingredient || '');
+        if (!fuzzyIncludes(hay, term)) return false;
       }
       if (availability === 'available' && !isAvailable) return false;
-      if (availability === 'unavailable' && isAvailable) return false;
+      if (availability === 'unavailable' && qty > 0) return false;
+      if (availability === 'low' && !isLow) return false;
       if (typeFilter && p.drug_type !== typeFilter) return false;
       if (shapeFilter && p.shape !== shapeFilter) return false;
       if (classFilter && p.classification !== classFilter) return false;
@@ -184,15 +245,20 @@
 
   function renderCard(p) {
     const qty = getQty(p);
-    const isAvailable = qty > (p.min_stock_threshold || 0);
+    const threshold = p.min_stock_threshold || 0;
+    const isAvailable = qty > threshold;
+    const isLow = qty > 0 && qty <= threshold;
     const displayName = p.name_en || p.name;
 
+    const hasActiveIngredient = !isPlaceholder(p.active_ingredient);
+    const hasConcentration = !isPlaceholder(p.concentration);
+
     let substitutesHtml = '';
-    if (p.active_ingredient) {
+    if (hasActiveIngredient) {
       const substitutes = allProducts.filter(s =>
         s.id !== p.id &&
-        s.active_ingredient &&
-        s.active_ingredient.toLowerCase() === p.active_ingredient.toLowerCase()
+        !isPlaceholder(s.active_ingredient) &&
+        s.active_ingredient.trim().toLowerCase() === p.active_ingredient.trim().toLowerCase()
       ).sort((a, b) => (getQty(b) > (b.min_stock_threshold||0) ? 1 : 0) - (getQty(a) > (a.min_stock_threshold||0) ? 1 : 0));
 
       if (substitutes.length > 0) {
@@ -201,26 +267,34 @@
             const sQty = getQty(s);
             const sAvail = sQty > (s.min_stock_threshold || 0);
             return '<div class="sub-item"><span>' + escapeHtml(s.name_en || s.name) +
-              (s.concentration ? ' (' + escapeHtml(s.concentration) + ')' : '') + '</span>' +
+              (!isPlaceholder(s.concentration) ? ' (' + escapeHtml(s.concentration) + ')' : '') + '</span>' +
               '<span class="' + (sAvail ? 'available' : 'unavailable') + '">' + (sAvail ? 'متوفر' : 'غير متوفر') + '</span></div>';
           }).join('') + '</div>';
       }
     }
 
+    let statusLabel = '❌ غير متوفر';
+    let statusClass = 'unavailable';
+    if (isAvailable) { statusLabel = '✅ متوفر'; statusClass = 'available'; }
+    else if (isLow) { statusLabel = '⚠️ ناقص'; statusClass = 'unavailable'; }
+
     return '<div class="result-card">' +
       '<div class="result-name-en">' + escapeHtml(displayName) + '</div>' +
       (p.name_en && p.name ? '<div class="result-name-ar">' + escapeHtml(p.name) + '</div>' : '') +
-      (p.active_ingredient ? '<div class="active-ingredient">' + escapeHtml(p.active_ingredient) + (p.concentration ? ' — ' + escapeHtml(p.concentration) : '') + '</div>' : '') +
+      (hasActiveIngredient ? '<div class="active-ingredient">' + escapeHtml(p.active_ingredient) + (hasConcentration ? ' — ' + escapeHtml(p.concentration) : '') + '</div>' : '') +
       '<div class="tags">' +
         (p.drug_type ? '<span class="tag">' + escapeHtml(p.drug_type) + '</span>' : '') +
         (p.shape ? '<span class="tag">' + escapeHtml(p.shape) + '</span>' : '') +
         (p.classification ? '<span class="tag">' + escapeHtml(p.classification) + '</span>' : '') +
       '</div>' +
       '<div class="stock-line">' +
-        '<span class="' + (isAvailable ? 'available' : 'unavailable') + '">' + (isAvailable ? '✅ متوفر' : '❌ غير متوفر') + '</span>' +
+        '<span class="' + statusClass + '">' + statusLabel + '</span>' +
         (p.default_sale_price ? '<span>' + p.default_sale_price + ' ج</span>' : '') +
       '</div>' +
-      '<button onclick="sellThis(\'' + p.id + '\')" ' + (isAvailable ? '' : 'disabled') + '>🛒 بيع</button>' +
+      '<div style="display:flex;gap:8px;">' +
+        '<button onclick="sellThis(\'' + p.id + '\')" ' + (isAvailable || isLow ? '' : 'disabled') + '>🛒 بيع</button>' +
+        '<button class="secondary" onclick="viewInInventory(\'' + escapeHtml(p.name).replace(/'/g, "\\'") + '\')">📦 عرض في المخزون</button>' +
+      '</div>' +
       substitutesHtml +
     '</div>';
   }
@@ -228,6 +302,90 @@
   window.sellThis = function(id) {
     window.location.href = 'sales.html?product=' + id;
   };
+
+  window.viewInInventory = function(name) {
+    window.location.href = 'inventory.html?search=' + encodeURIComponent(name);
+  };
+
+  // ------------------------------------------------------------
+  // مسح باركود للبحث
+  // ------------------------------------------------------------
+  let scanReader = null, nativeDetectorStream = null, nativeDetectorLoop = null;
+
+  document.getElementById('scanBtn').addEventListener('click', startScan);
+  document.getElementById('closeScanBtn').addEventListener('click', stopScan);
+
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = 1000;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start(); osc.stop(ctx.currentTime + 0.15);
+    } catch (e) {}
+  }
+
+  function onBarcodeFound(code) {
+    playBeep();
+    stopScan();
+    document.getElementById('barcodeInput').value = code;
+    document.getElementById('barcodeInput').dispatchEvent(new Event('input'));
+  }
+
+  async function startScan() {
+    const modal = document.getElementById('scanModal');
+    const status = document.getElementById('scanStatus');
+    const videoEl = document.getElementById('scanVideo');
+    modal.classList.remove('hidden');
+    status.textContent = 'جاري تشغيل الكاميرا...';
+
+    if ('BarcodeDetector' in window) {
+      try {
+        const supported = await window.BarcodeDetector.getSupportedFormats();
+        const formats = ['ean_13', 'ean_8', 'upc_a', 'code_128', 'qr_code'].filter(f => supported.includes(f));
+        const detector = new window.BarcodeDetector({ formats: formats.length ? formats : undefined });
+        nativeDetectorStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } });
+        videoEl.srcObject = nativeDetectorStream;
+        await videoEl.play();
+        status.textContent = 'جاري المسح...';
+        nativeDetectorLoop = setInterval(async () => {
+          if (!nativeDetectorStream) return;
+          try {
+            const barcodes = await detector.detect(videoEl);
+            if (barcodes.length > 0) onBarcodeFound(barcodes[0].rawValue);
+          } catch (e) {}
+        }, 300);
+        return;
+      } catch (err) {
+        stopScan();
+      }
+    }
+
+    modal.classList.remove('hidden');
+    try {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [ZXing.BarcodeFormat.EAN_13, ZXing.BarcodeFormat.EAN_8, ZXing.BarcodeFormat.UPC_A, ZXing.BarcodeFormat.CODE_128, ZXing.BarcodeFormat.QR_CODE]);
+      scanReader = new ZXing.BrowserMultiFormatReader(hints);
+      await scanReader.decodeFromConstraints(
+        { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 }, advanced: [{ focusMode: 'continuous' }] } },
+        videoEl,
+        (result) => { if (result) onBarcodeFound(result.getText()); }
+      );
+    } catch (err) {
+      status.textContent = 'تعذّر تشغيل الكاميرا: ' + err.message;
+    }
+  }
+
+  function stopScan() {
+    if (scanReader) { scanReader.reset(); scanReader = null; }
+    if (nativeDetectorLoop) { clearInterval(nativeDetectorLoop); nativeDetectorLoop = null; }
+    if (nativeDetectorStream) { nativeDetectorStream.getTracks().forEach(t => t.stop()); nativeDetectorStream = null; }
+    document.getElementById('scanModal').classList.add('hidden');
+  }
 
   function escapeHtml(str) {
     const div = document.createElement('div');

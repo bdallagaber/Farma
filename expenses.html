@@ -287,7 +287,22 @@
   window.editExpense = async function(id) {
     const e = (window._expensesCache || []).find(x => x.id === id);
     if (!e) return;
-    const newAmount = prompt('المبلغ الجديد:', e.amount);
+
+    const catOptions = 'salaries=مرتبات, bills=فواتير, maintenance=صيانة, other=أخرى';
+    const newCategory = prompt('نوع المصروف (اكتب واحد من: salaries / bills / maintenance / other)\n' + catOptions, e.category);
+    if (newCategory === null) return;
+    if (!['salaries','bills','maintenance','other'].includes(newCategory)) { alert('نوع غير صحيح'); return; }
+
+    let newNote = e.other_note;
+    if (newCategory === 'other') {
+      newNote = prompt('وضّح "أخرى" بتاعة إيه:', e.other_note || '');
+      if (newNote === null) return;
+      if (!newNote.trim()) { alert('لازم توضّح المصروف'); return; }
+    } else {
+      newNote = null;
+    }
+
+    const newAmount = prompt('المبلغ:', e.amount);
     if (newAmount === null) return;
     const parsed = parseFloat(newAmount);
     if (isNaN(parsed) || parsed <= 0) { alert('مبلغ غير صحيح'); return; }
@@ -295,11 +310,14 @@
     const currentDate = e.created_at.split('T')[0];
     const newDate = prompt('تاريخ المصروف (YYYY-MM-DD):', currentDate);
     if (newDate === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) { alert('صيغة تاريخ غير صحيحة'); return; }
 
-    const updatePayload = { amount: parsed };
-    if (newDate !== currentDate && /^\d{4}-\d{2}-\d{2}$/.test(newDate)) {
-      updatePayload.created_at = new Date(newDate + 'T12:00:00').toISOString();
-    }
+    const updatePayload = {
+      category: newCategory,
+      other_note: newNote,
+      amount: parsed,
+      created_at: new Date(newDate + 'T12:00:00').toISOString()
+    };
 
     const { data, error } = await sb.from('expenses').update(updatePayload).eq('id', id).select();
     if (error) { alert('حصل خطأ: ' + error.message); return; }

@@ -222,6 +222,21 @@
   let lastScannedCode = null;
   let lastScannedTime = 0;
 
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 1000;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e) { /* تجاهل لو المتصفح مانع الصوت */ }
+  }
+
   function handleScanResult(code) {
     const now = Date.now();
     if (code === lastScannedCode && (now - lastScannedTime) < 2500) return; // منع تكرار نفس الكود سريعًا
@@ -235,6 +250,8 @@
       status.textContent = '❌ الكود ده مش متسجّل لأي منتج';
       return; // نفضل نمسح، من غير ما نقفل
     }
+
+    playBeep();
 
     const currentInCart = cart.filter(c => c.product_id === match.id).reduce((s, c) => s + c.smallQty, 0);
     const currentStock = getInvQty(match);
@@ -258,7 +275,11 @@
     });
     renderCart();
 
-    status.textContent = '✅ اتضاف: ' + match.name + ' — إجمالي السلة: ' + cart.length + ' صنف';
+    if (pricePerSmall <= 0) {
+      status.textContent = '⚠️ "' + match.name + '" اتضاف بس مالوش سعر مسجّل — لازم تعدّل سعره في السلة قبل التأكيد';
+    } else {
+      status.textContent = '✅ اتضاف: ' + match.name + ' — إجمالي السلة: ' + cart.length + ' صنف';
+    }
   }
 
   async function startScan() {
@@ -528,11 +549,15 @@
     const pid = document.getElementById('s_product').value;
     const level = document.getElementById('s_unit').value;
     const qty = parseFloat(document.getElementById('s_qty').value) || 0;
-    const price = parseFloat(document.getElementById('s_price').value) || 0;
+    const price = parseFloat(document.getElementById('s_price').value);
     const p = getProduct(pid);
 
     if (!p || qty <= 0) {
       showAddCartMsg('اختار منتج وكمية صحيحة', 'error');
+      return;
+    }
+    if (isNaN(price) || price <= 0) {
+      showAddCartMsg('السعر لازم يكون أكبر من صفر — اكتب سعر المنتج', 'error');
       return;
     }
 
@@ -615,25 +640,39 @@
   document.getElementById('s_discount_type').addEventListener('change', recalcTotals);
   document.getElementById('s_discount_value').addEventListener('input', recalcTotals);
 
+  let isProcessingSale = false;
+
   document.getElementById('sellBtn').addEventListener('click', async () => {
+    if (isProcessingSale) return; // منع الضغط المزدوج من إنشاء عملية بيع مكررة
+    isProcessingSale = true;
+
     const sellBtn = document.getElementById('sellBtn');
+    sellBtn.disabled = true;
     const saleType = document.getElementById('s_sale_type').value;
 
-    // لو فيه صنف مكتوب في الفورم بس مش متضاف للسلة، نضيفه تلقائي عشان مايضيعش
-    const pid = document.getElementById('s_product').value;
-    if (pid && parseFloat(document.getElementById('s_qty').value) > 0) {
+    // لو السلة فاضية خالص وفيه منتج مكتوب في الفورم، ناخده كصنف واحد مباشرة (وضع البيع السريع)
+    if (cart.length === 0) {
       document.getElementById('addToCartBtn').click();
     }
 
     if (cart.length === 0) {
       showSellMsg('السلة فاضية، اختار منتج وكمية الأول', 'error');
+      sellBtn.disabled = false;
+      isProcessingSale = false;
+      return;
+    }
+
+    const zeroItem = cart.find(i => !i.price || i.price <= 0);
+    if (zeroItem) {
+      showSellMsg('⚠️ "' + zeroItem.name + '" في السلة من غير سعر — عدّل سعره أو احذفه قبل التأكيد', 'error');
+      sellBtn.disabled = false;
+      isProcessingSale = false;
       return;
     }
 
     const { subtotal, finalTotal } = recalcTotals();
     const discountRatio = subtotal > 0 ? (finalTotal / subtotal) : 1;
 
-    sellBtn.disabled = true;
     sellBtn.textContent = 'جاري الحفظ...';
 
     try {
@@ -712,6 +751,7 @@
     } finally {
       sellBtn.disabled = false;
       sellBtn.textContent = '✅ تأكيد البيع';
+      isProcessingSale = false;
     }
   });
 
@@ -767,7 +807,7 @@
     document.getElementById('salesListTitle').textContent = isAdmin ? '🕒 كل عمليات البيع' : '🕒 عملياتي الأخيرة';
 
     let query = sb.from('sales')
-      .select('id, quantity, unit_sold, sale_price, created_at, product_id, products(name), profiles(full_name), customers(name)')
+      .select('id, quantity, unit_sold, sale_price, created_at, product_id, products(name, unit_small, unit_medium, unit_large, unit_medium_to_small, unit_large_to_medium), profiles(full_name), customers(name)')
       .order('created_at', { ascending: false });
 
     if (isAdmin) {
@@ -807,7 +847,7 @@
         '<td>' + new Date(s.created_at).toLocaleString('ar-EG') + '</td>';
       if (isAdmin) {
         html += '<td>' +
-          '<button class="small secondary" onclick="editSalePrice(\'' + s.id + '\')">تعديل السعر</button> ' +
+          '<button class="small secondary" onclick="editSalePrice(\'' + s.id + '\')">تعديل</button> ' +
           '<button class="small danger" onclick="deleteSale(\'' + s.id + '\')">حذف</button>' +
           '</td>';
       }
@@ -820,22 +860,86 @@
   window.editSalePrice = async function(saleId) {
     const s = (window._salesCache || []).find(x => x.id === saleId);
     if (!s) return;
-    const newPrice = prompt('السعر الجديد للعملية دي:', s.sale_price);
-    if (newPrice === null) return;
-    const parsed = parseFloat(newPrice);
-    if (isNaN(parsed) || parsed < 0) { alert('سعر غير صحيح'); return; }
+    const p = s.products;
+    if (!p) { alert('تعذّر تحميل بيانات المنتج لهذه العملية'); return; }
 
-    const { data, error } = await sb.from('sales').update({ sale_price: parsed }).eq('id', saleId).select();
-    if (error) { alert('حصل خطأ: ' + error.message); return; }
-    if (!data || data.length === 0) { alert('التعديل لم يُحفظ'); return; }
-    await loadRecentSales();
+    if (!confirm('التعديل هيمسح العملية دي ويرجّع كميتها للمخزون، وبعدين تقدر تعمل البيعة من جديد بالتفاصيل اللي تحبها. تكمل؟')) return;
+
+    try {
+      // 1) نرجّع الكمية القديمة للمخزون ونمسح العملية القديمة (بالظبط زي حذف البيعة)
+      const qtyMedium = p.unit_medium_to_small || 1;
+      const qtyLarge = p.unit_large_to_medium || 1;
+      let oldSmallQty = s.quantity;
+      if (s.unit_sold === p.unit_medium) oldSmallQty = s.quantity * qtyMedium;
+      else if (s.unit_sold === p.unit_large) oldSmallQty = s.quantity * qtyMedium * qtyLarge;
+
+      const { error: delError } = await sb.from('sales').delete().eq('id', saleId);
+      if (delError) throw delError;
+
+      const { data: invRow, error: invSelErr } = await sb.from('inventory').select('quantity_smallest_unit').eq('product_id', s.product_id).single();
+      if (invSelErr) throw invSelErr;
+
+      const { data: updatedInv, error: invError } = await sb.from('inventory')
+        .update({ quantity_smallest_unit: (invRow.quantity_smallest_unit || 0) + oldSmallQty })
+        .eq('product_id', s.product_id)
+        .select();
+      if (invError) throw invError;
+      if (!updatedInv || updatedInv.length === 0) {
+        alert('⚠️ تعذّر إرجاع الكمية للمخزون تلقائيًا، راجعها يدويًا');
+      }
+
+      await loadProducts();
+      await loadRecentSales();
+
+      // 2) نجهّز فورم البيع بنفس بيانات العملية القديمة عشان تعدّل أي حاجة فيها وتأكدها من جديد
+      document.getElementById('s_product').value = s.product_id;
+      updateUnitOptions();
+      document.getElementById('s_unit').value =
+        s.unit_sold === p.unit_large ? 'large' : (s.unit_sold === p.unit_medium ? 'medium' : 'small');
+      document.getElementById('s_qty').value = s.quantity;
+      document.getElementById('s_price').value = s.sale_price;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showSellMsg('البيانات القديمة اتحمّلت في الفورم فوق — عدّل اللي عايزه وادوس "أضف للسلة" ثم "تأكيد البيع"', 'ok');
+    } catch (err) {
+      alert('حصل خطأ: ' + err.message);
+    }
   };
 
   window.deleteSale = async function(saleId) {
-    if (!confirm('متأكد إنك عايز تمسح عملية البيع دي؟ (ملحوظة: الكمية اللي اتخصمت من المخزون مش هترجع تلقائي، لازم تعدّلها يدويًا في المخزون لو محتاج)')) return;
-    const { error } = await sb.from('sales').delete().eq('id', saleId);
-    if (error) { alert('تعذّر الحذف: ' + error.message); return; }
-    await loadRecentSales();
+    const s = (window._salesCache || []).find(x => x.id === saleId);
+    if (!s) return;
+    if (!confirm('متأكد إنك عايز تمسح عملية البيع دي؟ الكمية هترجع تلقائي للمخزون.')) return;
+
+    try {
+      const p = s.products;
+      let smallQty = s.quantity;
+      if (p) {
+        const qtyMedium = p.unit_medium_to_small || 1;
+        const qtyLarge = p.unit_large_to_medium || 1;
+        if (s.unit_sold === p.unit_medium) smallQty = s.quantity * qtyMedium;
+        else if (s.unit_sold === p.unit_large) smallQty = s.quantity * qtyMedium * qtyLarge;
+      }
+
+      const { error: delError } = await sb.from('sales').delete().eq('id', saleId);
+      if (delError) throw delError;
+
+      const { data: invRow, error: invSelErr } = await sb.from('inventory').select('quantity_smallest_unit').eq('product_id', s.product_id).single();
+      if (invSelErr) throw invSelErr;
+
+      const { data: updatedInv, error: invError } = await sb.from('inventory')
+        .update({ quantity_smallest_unit: (invRow.quantity_smallest_unit || 0) + smallQty })
+        .eq('product_id', s.product_id)
+        .select();
+      if (invError) throw invError;
+      if (!updatedInv || updatedInv.length === 0) {
+        alert('⚠️ اتمسحت عملية البيع، لكن الكمية ماترجعتش للمخزون فعليًا (تحديث مرفوض). راجع المخزون يدويًا لهذا الصنف.');
+      }
+
+      await loadRecentSales();
+      await loadProducts();
+    } catch (err) {
+      alert('حصل خطأ: ' + err.message);
+    }
   };
 
   document.getElementById('exportSalesBtn').addEventListener('click', () => {

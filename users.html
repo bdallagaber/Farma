@@ -176,7 +176,7 @@
     } else {
       const username = document.getElementById('u_username').value.trim();
       if (!username || /\s/.test(username)) { showMsg('اكتب اسم مستخدم صحيح من غير مسافات', 'error'); return; }
-      email = username + '@pharmacy.local';
+      email = username + '@pharmacy-user.app';
       displayLogin = username + ' (يوزر بسيط، مفيش استرجاع باسورد)';
     }
 
@@ -204,14 +204,23 @@
 
       const allowedPages = Array.from(document.querySelectorAll('.pageChk:checked')).map(c => c.value);
 
-      const { error: profileError } = await sb.from('profiles').insert({
-        id: signUpData.user.id,
-        full_name: name,
-        role: role,
-        email: email,
-        job_title: jobTitle || null,
-        allowed_pages: allowedPages
-      });
+      // أحيانًا حساب المستخدم الجديد ياخد جزء من الثانية لغاية ما يظهر فعليًا في القاعدة،
+      // فلو حصل خطأ ربط (FK) نجرب تاني كذا مرة بدل ما نفشل على طول
+      let profileError = null;
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        const { error } = await sb.from('profiles').insert({
+          id: signUpData.user.id,
+          full_name: name,
+          role: role,
+          email: email,
+          job_title: jobTitle || null,
+          allowed_pages: allowedPages
+        });
+        profileError = error;
+        if (!error) break;
+        if (!/foreign key|violates/i.test(error.message)) break; // خطأ مختلف، مفيش داعي نكرر
+        await new Promise(r => setTimeout(r, 700));
+      }
       if (profileError) throw profileError;
 
       showMsg('تم إضافة "' + name + '" بنجاح ✅ — بيانات الدخول: ' + displayLogin, 'ok');
@@ -255,11 +264,11 @@
     let html = '<table><thead><tr><th>الاسم</th><th>المسمى الوظيفي</th><th>الإيميل/اليوزر</th><th>الدور</th><th>الأقسام المسموحة</th><th>إجراءات</th></tr></thead><tbody>';
     for (const u of data) {
       const pagesText = u.role === 'admin' ? 'الكل' : ((u.allowed_pages || []).map(p => PAGE_NAMES[p] || p).join('، ') || 'مفيش');
-      const isFakeEmail = (u.email || '').endsWith('@pharmacy.local');
+      const isFakeEmail = (u.email || '').endsWith('@pharmacy-user.app');
       html += '<tr>' +
         '<td>' + escapeHtml(u.full_name) + '</td>' +
         '<td>' + escapeHtml(u.job_title || '—') + '</td>' +
-        '<td>' + escapeHtml(isFakeEmail ? u.email.replace('@pharmacy.local', '') + ' (يوزر بسيط)' : (u.email || '—')) + '</td>' +
+        '<td>' + escapeHtml(isFakeEmail ? u.email.replace('@pharmacy-user.app', '') + ' (يوزر بسيط)' : (u.email || '—')) + '</td>' +
         '<td>' + (u.role === 'admin' ? 'أدمن' : 'موظف') + '</td>' +
         '<td>' + escapeHtml(pagesText) + '</td>' +
         '<td>' +
