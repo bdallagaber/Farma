@@ -116,6 +116,13 @@
       </div>
     </div>
     <div>
+      <label>المورد</label>
+      <select id="p_supplier">
+        <option value="">-- بدون --</option>
+      </select>
+      <button type="button" id="addSupplierBtn" class="secondary small" style="margin-bottom:12px;">+ إضافة مورد جديد</button>
+    </div>
+    <div>
       <label>المادة الفعالة</label>
       <input type="text" id="p_active_ingredient" placeholder="مثال: Amoxicillin">
     </div>
@@ -184,6 +191,14 @@
   <div class="msg" id="addMsg"></div>
 </div>
 
+<div class="card" id="manageOptionsCard">
+  <details>
+    <summary style="cursor:pointer;color:#6fcf97;font-weight:600;">⚙️ إدارة الاختيارات (تعديل/حذف أشكال، أنواع، تصنيفات، موردين)</summary>
+    <input type="text" id="manageOptionsSearch" placeholder="🔍 ابحث في الاختيارات..." style="margin-top:12px;">
+    <div id="manageOptionsWrap"></div>
+  </details>
+</div>
+
 <div class="card">
   <h2>📋 المخزون الحالي</h2>
   <div class="toolbar">
@@ -235,7 +250,7 @@
   let isAdmin = false;
   let editingProductId = null;
   let scanReader = null;
-  let customOptions = { drug_shape: [], drug_type: [], classification: [] };
+  let customOptions = { drug_shape: [], drug_type: [], classification: [], supplier: [] };
 
   function getSmallUnitFor(shape) {
     return SMALL_UNIT_OVERRIDES[shape] || 'piece';
@@ -244,7 +259,7 @@
   async function loadCustomOptions() {
     const { data, error } = await sb.from('custom_options').select('category, parent, value').order('value');
     if (error) return;
-    customOptions = { drug_shape: [], drug_type: [], classification: [] };
+    customOptions = { drug_shape: [], drug_type: [], classification: [], supplier: [] };
     (data || []).forEach(o => {
       if (!customOptions[o.category]) customOptions[o.category] = [];
       customOptions[o.category].push({ parent: o.parent, value: o.value });
@@ -257,9 +272,78 @@
     classSel.innerHTML = '<option value="">-- بدون --</option>' +
       customOptions.classification.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
 
+    const supplierSel = document.getElementById('p_supplier');
+    supplierSel.innerHTML = '<option value="">-- بدون --</option>' +
+      customOptions.supplier.map(o => '<option value="' + escapeHtml(o.value) + '">' + escapeHtml(o.value) + '</option>').join('');
+
     updateShapeOptionsForType();
     populateFilterDropdowns();
+    renderManageOptionsPanel();
   }
+
+  function renderManageOptionsPanel() {
+    const wrap = document.getElementById('manageOptionsWrap');
+    if (!wrap) return;
+    if (!isAdmin) { wrap.innerHTML = '<p style="font-size:12px;color:#9fb3a8;">تعديل/حذف الاختيارات متاح للأدمن بس.</p>'; return; }
+
+    const term = (document.getElementById('manageOptionsSearch').value || '').trim().toLowerCase();
+    const catLabels = { drug_shape: 'الأشكال الدوائية', drug_type: 'أنواع الصنف', classification: 'التصنيفات', supplier: 'الموردين' };
+    let html = '';
+    for (const cat of ['drug_shape', 'drug_type', 'classification', 'supplier']) {
+      const items = (customOptions[cat] || []).filter(o => !term || o.value.toLowerCase().includes(term));
+      if (term && items.length === 0) continue;
+
+      html += '<div style="margin-bottom:14px;"><div style="font-size:12px;color:#b7c9be;margin-bottom:6px;">' + catLabels[cat] + '</div>';
+      if (items.length === 0) {
+        html += '<p style="font-size:12px;color:#9fb3a8;">مفيش اختيارات مضافة</p>';
+      } else {
+        html += '<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+        items.forEach(o => {
+          const label = o.parent ? (o.value + ' (' + o.parent + ')') : o.value;
+          const safeParent = escapeHtml((o.parent || '').replace(/'/g, "\\'"));
+          const safeValue = escapeHtml(o.value.replace(/'/g, "\\'"));
+          html += '<span style="background:#0f1b16;border:1px solid #2a4536;border-radius:20px;padding:4px 10px;font-size:12px;display:flex;align-items:center;gap:8px;">' +
+            escapeHtml(label) +
+            '<button type="button" onclick="editCustomOption(\'' + cat + '\', \'' + safeParent + '\', \'' + safeValue + '\')" style="background:none;border:none;color:#6fcf97;cursor:pointer;padding:0;font-size:13px;">✎</button>' +
+            '<button type="button" onclick="deleteCustomOption(\'' + cat + '\', \'' + safeParent + '\', \'' + safeValue + '\')" style="background:none;border:none;color:#f28b82;cursor:pointer;padding:0;font-size:13px;">✕</button>' +
+            '</span>';
+        });
+        html += '</div>';
+      }
+      html += '</div>';
+    }
+    wrap.innerHTML = html || '<p style="font-size:12px;color:#9fb3a8;">مفيش نتائج مطابقة للبحث</p>';
+  }
+
+  document.getElementById('manageOptionsSearch').addEventListener('input', renderManageOptionsPanel);
+
+  window.editCustomOption = async function(category, parent, oldValue) {
+    const newValue = prompt('اكتب الاسم الجديد بدل "' + oldValue + '":', oldValue);
+    if (!newValue || !newValue.trim() || newValue.trim() === oldValue) return;
+
+    let query = sb.from('custom_options').update({ value: newValue.trim() }).eq('category', category).eq('value', oldValue);
+    query = parent ? query.eq('parent', parent) : query.is('parent', null);
+    const { error } = await query;
+    if (error) { alert('تعذّر التعديل: ' + error.message); return; }
+
+    // نحدّث الأصناف اللي كانت مستخدمة الاسم القديم عشان تفضل متسقة
+    if (category === 'drug_shape') await sb.from('products').update({ shape: newValue.trim() }).eq('shape', oldValue);
+    if (category === 'drug_type') await sb.from('products').update({ drug_type: newValue.trim() }).eq('drug_type', oldValue);
+    if (category === 'classification') await sb.from('products').update({ classification: newValue.trim() }).eq('classification', oldValue);
+    if (category === 'supplier') await sb.from('products').update({ supplier: newValue.trim() }).eq('supplier', oldValue);
+
+    await loadCustomOptions();
+    await loadInventory();
+  };
+
+  window.deleteCustomOption = async function(category, parent, value) {
+    if (!confirm('متأكد إنك عايز تمسح "' + value + '"؟ (الأصناف اللي مسجّلة بيه مش هتتمسح، بس مش هتلاقيه في القايمة تاني)')) return;
+    let query = sb.from('custom_options').delete().eq('category', category).eq('value', value);
+    query = parent ? query.eq('parent', parent) : query.is('parent', null);
+    const { error } = await query;
+    if (error) { alert('تعذّر الحذف: ' + error.message); return; }
+    await loadCustomOptions();
+  };
 
   function updateShapeOptionsForType() {
     const type = document.getElementById('p_drug_type').value;
@@ -303,7 +387,7 @@
   document.getElementById('p_drug_type').addEventListener('change', updateShapeOptionsForType);
 
   async function addCustomOption(category, parent) {
-    const label = category === 'drug_shape' ? 'الشكل الدوائي' : (category === 'classification' ? 'التصنيف' : 'النوع');
+    const label = category === 'drug_shape' ? 'الشكل الدوائي' : (category === 'classification' ? 'التصنيف' : (category === 'supplier' ? 'المورد' : 'النوع'));
     const value = prompt('اكتب اسم ' + label + ' الجديد:');
     if (!value || !value.trim()) return;
     const { error } = await sb.from('custom_options').insert({ category, parent: parent || null, value: value.trim() });
@@ -311,6 +395,7 @@
     await loadCustomOptions();
     if (category === 'drug_shape') document.getElementById('p_shape').value = value.trim();
     if (category === 'classification') document.getElementById('p_classification').value = value.trim();
+    if (category === 'supplier') document.getElementById('p_supplier').value = value.trim();
     if (category === 'drug_type') { document.getElementById('p_drug_type').value = value.trim(); updateShapeOptionsForType(); }
   }
 
@@ -322,6 +407,9 @@
   });
   document.getElementById('addTypeBtn').addEventListener('click', () => {
     addCustomOption('drug_type', null);
+  });
+  document.getElementById('addSupplierBtn').addEventListener('click', () => {
+    addCustomOption('supplier', null);
   });
 
   (async () => {
@@ -412,6 +500,7 @@
     const drugType = document.getElementById('p_drug_type').value;
     const shape = document.getElementById('p_shape').value;
     const classification = document.getElementById('p_classification').value || null;
+    const supplier = document.getElementById('p_supplier').value || null;
     const activeIngredient = document.getElementById('p_active_ingredient').value.trim() || null;
     const concentration = document.getElementById('p_concentration').value.trim() || null;
     const retailAllowed = document.getElementById('p_retail_allowed').value === 'yes';
@@ -442,6 +531,7 @@
         name_en: nameEn || null,
         drug_type: drugType,
         classification,
+        supplier,
         active_ingredient: activeIngredient,
         concentration,
         retail_allowed: retailAllowed,
@@ -520,6 +610,7 @@
     document.getElementById('p_drug_type').selectedIndex = 0;
     updateShapeOptionsForType();
     document.getElementById('p_classification').value = '';
+    document.getElementById('p_supplier').value = '';
     document.getElementById('p_active_ingredient').value = '';
     document.getElementById('p_concentration').value = '';
     document.getElementById('p_retail_allowed').value = 'no';
@@ -679,7 +770,7 @@
     const wrap = document.getElementById('tableWrap');
     const { data: products, error } = await sb
       .from('products')
-      .select('id, name, name_en, shape, drug_type, classification, active_ingredient, concentration, retail_allowed, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit)')
+      .select('id, name, name_en, shape, drug_type, classification, supplier, active_ingredient, concentration, retail_allowed, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -814,6 +905,7 @@
     updateShapeOptionsForType();
     document.getElementById('p_shape').value = p.shape || '';
     document.getElementById('p_classification').value = p.classification || '';
+    document.getElementById('p_supplier').value = p.supplier || '';
     document.getElementById('p_active_ingredient').value = p.active_ingredient || '';
     document.getElementById('p_concentration').value = p.concentration || '';
     document.getElementById('p_retail_allowed').value = p.retail_allowed ? 'yes' : 'no';
