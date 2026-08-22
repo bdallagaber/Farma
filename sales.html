@@ -271,6 +271,7 @@
       unit_label: unitLabel(match, 'small'),
       quantity: 1,
       smallQty: 1,
+      ratioToSmall: 1,
       price: pricePerSmall
     });
     renderCart();
@@ -435,13 +436,13 @@
   }
 
   function renderProductOptions(searchText) {
-    const term = (searchText || '').trim().toLowerCase();
-    const filtered = productsCache.filter(p => !term || p.name.toLowerCase().includes(term));
+    const term = (searchText || '').trim();
+    const filtered = productsCache.filter(p => !term || fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term));
     const sel = document.getElementById('s_product');
     const previouslySelected = sel.value;
 
     sel.innerHTML = '<option value="">-- اختار المنتج --</option>' +
-      filtered.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>').join('');
+      filtered.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name_en ? (p.name_en + ' — ' + p.name) : p.name) + '</option>').join('');
 
     // نحافظ على المنتج المختار لو لسه موجود بعد الفلترة
     if (filtered.some(p => p.id === previouslySelected)) {
@@ -459,6 +460,20 @@
 
   function getProduct(id) {
     return productsCache.find(p => p.id === id);
+  }
+
+  function normalizeForSearch(s) {
+    return (s || '').toString().toLowerCase().replace(/\s+/g, '');
+  }
+
+  function fuzzyIncludes(haystack, term) {
+    if (!term) return true;
+    const normHay = normalizeForSearch(haystack);
+    const normTerm = normalizeForSearch(term);
+    if (normHay.includes(normTerm)) return true;
+    const words = term.trim().split(/\s+/).filter(Boolean);
+    if (words.length > 1) return words.every(w => normHay.includes(normalizeForSearch(w)));
+    return false;
   }
 
   function unitLabel(p, level) {
@@ -577,6 +592,7 @@
       unit_label: unitLabel(p, level),
       quantity: qty,
       smallQty: smallQty,
+      ratioToSmall: smallQty / qty,
       price: price
     });
 
@@ -603,8 +619,10 @@
     cart.forEach((item, i) => {
       html += '<tr>' +
         '<td>' + escapeHtml(item.name) + '</td>' +
-        '<td>' + item.quantity + ' ' + escapeHtml(item.unit_label) + '</td>' +
-        '<td>' + item.price.toFixed(2) + ' ج</td>' +
+        '<td><input type="number" min="1" value="' + item.quantity + '" style="width:60px;padding:6px;font-size:13px;margin-bottom:0;" ' +
+          'onchange="updateCartQty(' + i + ', this.value)"> ' + escapeHtml(item.unit_label) + '</td>' +
+        '<td><input type="number" min="0" step="0.01" value="' + item.price.toFixed(2) + '" style="width:70px;padding:6px;font-size:13px;margin-bottom:0;" ' +
+          'onchange="updateCartPrice(' + i + ', this.value)"> ج</td>' +
         '<td><button type="button" class="small danger" onclick="removeFromCart(' + i + ')">حذف</button></td>' +
         '</tr>';
     });
@@ -612,6 +630,37 @@
     wrap.innerHTML = html;
     recalcTotals();
   }
+
+  window.updateCartQty = function(index, newQtyRaw) {
+    const item = cart[index];
+    const newQty = parseFloat(newQtyRaw);
+    if (isNaN(newQty) || newQty <= 0) { renderCart(); return; }
+
+    const newSmallQty = newQty * item.ratioToSmall;
+    const product = getProduct(item.product_id);
+    const currentStock = product ? getInvQty(product) : Infinity;
+    const otherInCart = cart.filter((c, idx) => idx !== index && c.product_id === item.product_id).reduce((s, c) => s + c.smallQty, 0);
+
+    if (newSmallQty + otherInCart > currentStock) {
+      alert('الكمية أكبر من المتاح (المتاح: ' + (currentStock - otherInCart) + ' ' + unitLabel(product, 'small') + ')');
+      renderCart();
+      return;
+    }
+
+    // نحافظ على نفس سعر الوحدة ونحدّث السعر الإجمالي حسب الكمية الجديدة
+    const pricePerUnit = item.quantity > 0 ? (item.price / item.quantity) : 0;
+    item.quantity = newQty;
+    item.smallQty = newSmallQty;
+    item.price = pricePerUnit * newQty;
+    renderCart();
+  };
+
+  window.updateCartPrice = function(index, newPriceRaw) {
+    const newPrice = parseFloat(newPriceRaw);
+    if (isNaN(newPrice) || newPrice < 0) { renderCart(); return; }
+    cart[index].price = newPrice;
+    renderCart();
+  };
 
   window.removeFromCart = function(index) {
     cart.splice(index, 1);
