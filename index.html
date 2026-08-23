@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>نظام إدارة الصيدلية</title>
+<script src="supabase-lib.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+<div class="card">
+  <h1>نظام إدارة الصيدلية</h1>
+  <p class="subtitle">سجّل دخولك للمتابعة</p>
+
+  <label for="email">البريد الإلكتروني أو اسم المستخدم</label>
+  <input type="text" id="email" placeholder="example@pharmacy.com أو اليوزر بتاعك">
+
+  <label for="password">كلمة المرور</label>
+  <input type="password" id="password" placeholder="••••••••">
+
+  <button id="loginBtn">تسجيل الدخول</button>
+  <div class="msg" id="msg"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">JS Error: ' + msg + ' (line ' + line + ')</div>');
+  };
+  window.onunhandledrejection = function(e) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>');
+  };
+
+  const loginBtn = document.getElementById('loginBtn');
+  const msg = document.getElementById('msg');
+
+  sb.auth.getSession().then(({ data: { session } }) => {
+    if (session) window.location.href = 'inventory.html';
+  });
+
+  loginBtn.addEventListener('click', async () => {
+    let email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!email || !password) {
+      showMsg('اكتب البريد الإلكتروني وكلمة المرور', 'error');
+      return;
+    }
+
+    // لو الموظف كاتب يوزر بسيط من غير إيميل حقيقي، نكمّل الصيغة اللي اتسجّل بيها تلقائي
+    if (!email.includes('@')) {
+      email = email.toLowerCase() + '.pharmacy.local@gmail.com';
+    }
+
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'جاري الدخول...';
+
+    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+
+    if (error) {
+      showMsg('بيانات الدخول غلط، حاول تاني', 'error');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'تسجيل الدخول';
+      return;
+    }
+
+    const { data: profile, error: profileError } = await sb
+      .from('profiles')
+      .select('role, full_name')
+      .eq('id', data.user.id)
+      .single();
+
+    if (profileError || !profile) {
+      showMsg('تم الدخول لكن لا يوجد حساب موظف مرتبط بك. تواصل مع الأدمن.', 'error');
+      loginBtn.disabled = false;
+      loginBtn.textContent = 'تسجيل الدخول';
+      return;
+    }
+
+    showMsg('تم الدخول بنجاح، مرحبًا ' + profile.full_name, 'ok');
+    loginBtn.textContent = 'تم الدخول ✅';
+    window.location.href = 'inventory.html';
+  });
+
+  function showMsg(text, type) {
+    msg.textContent = text;
+    msg.className = 'msg ' + type;
+  }
+</script>
+
+</body>
+</html>

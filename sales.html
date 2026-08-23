@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>المبيعات - نظام إدارة الصيدلية</title>
+<script src="supabase-lib.js"></script>
+<script src="zxing-lib.js"></script>
+<script src="xlsx-lib.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <h1>📦 نظام إدارة الصيدلية</h1>
+  <div>
+    <span class="userinfo" id="userinfo"></span>
+    <button id="logoutBtn" class="small secondary" style="margin-right:8px;">خروج</button>
+  </div>
+</header>
+
+<nav>
+  <a href="inventory.html">المخزون</a>
+  <a href="sales.html" class="active">المبيعات</a>
+  <a href="shortages.html">النواقص</a>
+  <a href="expenses.html">المصروفات</a>
+  <a href="profit.html">الأرباح</a>
+  <a href="search.html">🔍 بحث الأدوية</a>
+  <a href="users.html">الإعدادات</a>
+</nav>
+
+<div class="card">
+  <h2>🧾 عملية بيع جديدة</h2>
+  <div class="grid">
+    <div class="full-width">
+      <label>المنتج</label>
+      <input type="text" id="s_search" placeholder="🔍 ابحث بالاسم..." style="margin-bottom:8px;">
+      <div style="display:flex;gap:8px;">
+        <select id="s_product" style="margin-bottom:0;">
+          <option value="">-- اختار المنتج --</option>
+        </select>
+        <button type="button" id="scanBtn" class="secondary" style="white-space:nowrap;">📷 مسح</button>
+      </div>
+      <p class="stock-hint" id="stockHint"></p>
+    </div>
+
+    <div>
+      <label>الوحدة المباعة</label>
+      <select id="s_unit"></select>
+    </div>
+    <div>
+      <label>الكمية</label>
+      <input type="number" id="s_qty" value="1" min="1">
+    </div>
+
+    <div class="full-width">
+      <label>السعر (جنيه)</label>
+      <input type="number" id="s_price" step="0.01" placeholder="بيتحسب تلقائي، تقدر تعدّله">
+    </div>
+  </div>
+  <button type="button" id="addToCartBtn" class="secondary">➕ أضف للسلة</button>
+  <div class="msg" id="addCartMsg"></div>
+
+  <div id="cartWrap" style="margin-top:16px;"></div>
+
+  <div class="grid" style="margin-top:16px;">
+    <div>
+      <label>نوع الخصم (اختياري)</label>
+      <select id="s_discount_type">
+        <option value="none">من غير خصم</option>
+        <option value="percent">نسبة مئوية %</option>
+        <option value="fixed">مبلغ ثابت</option>
+      </select>
+    </div>
+    <div>
+      <label>قيمة الخصم</label>
+      <input type="number" id="s_discount_value" value="0" min="0" step="0.01">
+    </div>
+  </div>
+
+  <div id="totalsBox" style="background:#f4f6f8;border:1px solid #e2e6ea;border-radius:8px;padding:12px;margin-bottom:16px;font-size:14px;">
+    <div style="display:flex;justify-content:space-between;"><span>الإجمالي قبل الخصم:</span><span id="subtotalText">0 ج</span></div>
+    <div style="display:flex;justify-content:space-between;color:#f28b82;"><span>الخصم:</span><span id="discountText">0 ج</span></div>
+    <div style="display:flex;justify-content:space-between;font-weight:700;color:#0d9488;margin-top:6px;"><span>الإجمالي النهائي:</span><span id="finalTotalText">0 ج</span></div>
+  </div>
+
+  <div class="grid">
+    <div>
+      <label>نوع البيع</label>
+      <select id="s_sale_type">
+        <option value="cash">كاش</option>
+        <option value="credit">آجل (على حساب عميل)</option>
+      </select>
+    </div>
+
+    <div id="customer_wrap" class="hidden">
+      <label>العميل</label>
+      <select id="s_customer">
+        <option value="">-- اختار عميل --</option>
+        <option value="__new__">+ عميل جديد</option>
+      </select>
+    </div>
+    <div id="newCustomerRow" class="new-customer-row full-width hidden">
+      <div>
+        <label>اسم العميل الجديد</label>
+        <input type="text" id="s_new_customer_name" placeholder="مثال: عيادة د. أحمد">
+      </div>
+      <div>
+        <label>تليفون (اختياري)</label>
+        <input type="text" id="s_new_customer_phone">
+      </div>
+    </div>
+  </div>
+  <button id="sellBtn">✅ تأكيد البيع</button>
+  <div class="msg" id="sellMsg"></div>
+</div>
+
+<div class="card">
+  <h2 id="salesListTitle">🕒 آخر عمليات البيع</h2>
+  <div class="toolbar hidden" id="adminSalesTools">
+    <button type="button" class="small secondary rangeBtn active" data-range="today">اليوم</button>
+    <button type="button" class="small secondary rangeBtn" data-range="week">آخر أسبوع</button>
+    <button type="button" class="small secondary rangeBtn" data-range="month">آخر شهر</button>
+    <button type="button" class="small secondary rangeBtn" data-range="all">الكل</button>
+    <input type="date" id="customFrom" class="hidden" style="width:auto;margin-bottom:0;">
+    <input type="date" id="customTo" class="hidden" style="width:auto;margin-bottom:0;">
+    <button type="button" id="customRangeBtn" class="small secondary">مدة مخصصة</button>
+    <button type="button" id="exportSalesBtn" class="small secondary">⬇️ تصدير إكسيل</button>
+  </div>
+  <div id="salesTableWrap"><p class="loading">جاري التحميل...</p></div>
+</div>
+
+<div id="scanModal" class="scan-modal hidden">
+  <div class="scan-box">
+    <p class="scan-msg">وجّه الكاميرا على كل باركود، هيتضاف تلقائي للسلة والكاميرا هتفضل شغالة للصنف اللي بعده</p>
+    <video id="scanVideo"></video>
+    <p class="scan-msg" id="scanStatus"></p>
+    <button type="button" id="closeScanBtn" class="secondary" style="width:100%;margin-top:10px;">✅ خلصت، اقفل المسح</button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">JS Error: ' + msg + ' (line ' + line + ')</div>');
+  };
+  window.onunhandledrejection = function(e) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>');
+  };
+
+  let scanReader = null;
+  let nativeDetectorStream = null;
+  let nativeDetectorLoop = null;
+
+  document.getElementById('scanBtn').addEventListener('click', startScan);
+  document.getElementById('closeScanBtn').addEventListener('click', stopScan);
+
+  let lastScannedCode = null;
+  let lastScannedTime = 0;
+
+  function playBeep() {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 1000;
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.15);
+    } catch (e) { /* تجاهل لو المتصفح مانع الصوت */ }
+  }
+
+  function handleScanResult(code) {
+    const now = Date.now();
+    if (code === lastScannedCode && (now - lastScannedTime) < 2500) return; // منع تكرار نفس الكود سريعًا
+    lastScannedCode = code;
+    lastScannedTime = now;
+
+    const status = document.getElementById('scanStatus');
+    const match = productsCache.find(p => p.qr_code === code);
+
+    if (!match) {
+      status.textContent = '❌ الكود ده مش متسجّل لأي منتج';
+      return; // نفضل نمسح، من غير ما نقفل
+    }
+
+    playBeep();
+
+    const currentInCart = cart.filter(c => c.product_id === match.id).reduce((s, c) => s + c.smallQty, 0);
+    const currentStock = getInvQty(match);
+    if (currentInCart + 1 > currentStock) {
+      status.textContent = '⚠️ "' + match.name + '" خلص من المخزون';
+      return;
+    }
+
+    const pricePerSmall = match.default_sale_price
+      ? match.default_sale_price / ((match.unit_large_to_medium || 1) * (match.unit_medium_to_small || 1))
+      : 0;
+
+    cart.push({
+      product_id: match.id,
+      name: match.name,
+      unit_sold: match.unit_small,
+      unit_label: unitLabel(match, 'small'),
+      quantity: 1,
+      smallQty: 1,
+      ratioToSmall: 1,
+      price: pricePerSmall
+    });
+    renderCart();
+
+    if (pricePerSmall <= 0) {
+      status.textContent = '⚠️ "' + match.name + '" اتضاف بس مالوش سعر مسجّل — لازم تعدّل سعره في السلة قبل التأكيد';
+    } else {
+      status.textContent = '✅ اتضاف: ' + match.name + ' — إجمالي السلة: ' + cart.length + ' صنف';
+    }
+  }
+
+  async function startScan() {
+    const modal = document.getElementById('scanModal');
+    const status = document.getElementById('scanStatus');
+    const videoEl = document.getElementById('scanVideo');
+    modal.classList.remove('hidden');
+    status.textContent = 'جاري تشغيل الكاميرا...';
+
+    // 1) نجرب الأول محرّك المسح الأصلي المدمج في المتصفح (نفس محرك جوجل، أسرع وأدق بكتير)
+    if ('BarcodeDetector' in window) {
+      try {
+        const supported = await window.BarcodeDetector.getSupportedFormats();
+        const formats = ['ean_13', 'ean_8', 'upc_a', 'code_128', 'qr_code'].filter(f => supported.includes(f));
+        const detector = new window.BarcodeDetector({ formats: formats.length ? formats : undefined });
+
+        nativeDetectorStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+        });
+        videoEl.srcObject = nativeDetectorStream;
+        await videoEl.play();
+        status.textContent = 'جاري المسح...';
+
+        let attemptCount = 0;
+        nativeDetectorLoop = setInterval(async () => {
+          if (!nativeDetectorStream) return;
+          attemptCount++;
+          try {
+            const barcodes = await detector.detect(videoEl);
+            if (barcodes.length > 0) {
+              handleScanResult(barcodes[0].rawValue);
+            } else {
+              status.textContent = 'جاري المسح... (محاولة رقم ' + attemptCount + ')';
+            }
+          } catch (e) { /* نتجاهل فشل فريم واحد ونكمل */ }
+        }, 300);
+        return; // نجحنا في استخدام المحرك الأصلي، مش محتاجين ZXing
+      } catch (err) {
+        stopScan();
+        status.textContent = 'تعذّر تشغيل المحرك الأصلي، هنجرب البديل...';
+        // نكمل تحت لمحاولة ZXing كبديل
+      }
+    }
+
+    // 2) بديل احتياطي: مكتبة ZXing (لو المتصفح مش بيدعم المحرك الأصلي)
+    modal.classList.remove('hidden');
+    status.textContent = 'جاري تشغيل الكاميرا (وضع بديل)...';
+    try {
+      const hints = new Map();
+      hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+      hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+        ZXing.BarcodeFormat.EAN_13,
+        ZXing.BarcodeFormat.EAN_8,
+        ZXing.BarcodeFormat.UPC_A,
+        ZXing.BarcodeFormat.CODE_128,
+        ZXing.BarcodeFormat.QR_CODE
+      ]);
+      scanReader = new ZXing.BrowserMultiFormatReader(hints);
+      let attemptCount = 0;
+      await scanReader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+            advanced: [{ focusMode: 'continuous' }]
+          }
+        },
+        videoEl,
+        async (result, err) => {
+          attemptCount++;
+          if (result) {
+            handleScanResult(result.getText());
+          } else if (err && err.message && !/No MultiFormat Readers|not found|NotFound/i.test(err.message)) {
+            status.textContent = 'خطأ أثناء المسح: ' + err.message;
+          } else {
+            status.textContent = 'جاري المسح... (محاولة رقم ' + attemptCount + ')';
+          }
+        }
+      );
+    } catch (err) {
+      status.textContent = 'تعذّر تشغيل الكاميرا: ' + err.message + ' (تأكد إنك سمحت للموقع باستخدام الكاميرا)';
+    }
+  }
+
+  function stopScan() {
+    if (scanReader) {
+      scanReader.reset();
+      scanReader = null;
+    }
+    if (nativeDetectorLoop) {
+      clearInterval(nativeDetectorLoop);
+      nativeDetectorLoop = null;
+    }
+    if (nativeDetectorStream) {
+      nativeDetectorStream.getTracks().forEach(t => t.stop());
+      nativeDetectorStream = null;
+    }
+    document.getElementById('scanModal').classList.add('hidden');
+  }
+
+  function getInvQty(p) {
+    if (!p.inventory) return 0;
+    const row = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
+    return row ? row.quantity_smallest_unit : 0;
+  }
+
+  const UNIT_LABELS = {
+    box: 'علبة', strip: 'شريط', piece: 'قطعة',
+    ampoule: 'أمبولة', sachet: 'كيس', other: 'أخرى'
+  };
+
+  let currentUser = null;
+  let isAdmin = false;
+  let productsCache = [];
+  let customersCache = [];
+
+  (async () => {
+    const auth = await requireAuth();
+    if (!auth) return;
+    if (!guardPageAccess(auth.profile, 'sales')) return;
+    currentUser = auth.user;
+    isAdmin = auth.profile.role === 'admin';
+
+    document.getElementById('userinfo').textContent =
+      auth.profile.full_name + ' (' + (isAdmin ? 'أدمن' : 'موظف') + ')';
+
+    await loadProducts();
+    await loadCustomers();
+    await loadRecentSales();
+
+    const params = new URLSearchParams(window.location.search);
+    const preselectId = params.get('product');
+    if (preselectId && getProduct(preselectId)) {
+      document.getElementById('s_product').value = preselectId;
+      updateUnitOptions();
+    }
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  async function loadProducts() {
+    const { data, error } = await sb
+      .from('products')
+      .select('id, name, name_en, shape, retail_allowed, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, other_note, default_sale_price, inventory(quantity_smallest_unit)')
+      .order('name');
+    if (error) return;
+    productsCache = data || [];
+    renderProductOptions(document.getElementById('s_search').value);
+  }
+
+  function renderProductOptions(searchText) {
+    const term = (searchText || '').trim();
+    const filtered = productsCache.filter(p => !term || fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term));
+    const sel = document.getElementById('s_product');
+    const previouslySelected = sel.value;
+
+    sel.innerHTML = '<option value="">-- اختار المنتج --</option>' +
+      filtered.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name_en ? (p.name_en + ' — ' + p.name) : p.name) + '</option>').join('');
+
+    // نحافظ على المنتج المختار لو لسه موجود بعد الفلترة
+    if (filtered.some(p => p.id === previouslySelected)) {
+      sel.value = previouslySelected;
+    }
+  }
+
+  document.getElementById('s_search').addEventListener('input', (e) => {
+    renderProductOptions(e.target.value);
+  });
+
+  document.getElementById('s_product').addEventListener('change', updateUnitOptions);
+  document.getElementById('s_unit').addEventListener('change', recalcPrice);
+  document.getElementById('s_qty').addEventListener('input', recalcPrice);
+
+  function getProduct(id) {
+    return productsCache.find(p => p.id === id);
+  }
+
+  function normalizeForSearch(s) {
+    return (s || '').toString().toLowerCase().replace(/\s+/g, '');
+  }
+
+  function fuzzyIncludes(haystack, term) {
+    if (!term) return true;
+    const normHay = normalizeForSearch(haystack);
+    const normTerm = normalizeForSearch(term);
+    if (normHay.includes(normTerm)) return true;
+    const words = term.trim().split(/\s+/).filter(Boolean);
+    if (words.length > 1) return words.every(w => normHay.includes(normalizeForSearch(w)));
+    return false;
+  }
+
+  function unitLabel(p, level) {
+    if (level === 'small') return p.unit_small === 'other' ? (p.other_note || 'أخرى') : UNIT_LABELS[p.unit_small];
+    if (level === 'medium') return p.unit_medium === 'other' ? (p.other_note || 'أخرى') : UNIT_LABELS[p.unit_medium];
+    if (level === 'large') return p.unit_large === 'other' ? (p.other_note || 'أخرى') : UNIT_LABELS[p.unit_large];
+  }
+
+  function updateUnitOptions() {
+    const pid = document.getElementById('s_product').value;
+    const unitSel = document.getElementById('s_unit');
+    const hint = document.getElementById('stockHint');
+    unitSel.innerHTML = '';
+
+    const p = getProduct(pid);
+    if (!p) { hint.textContent = ''; return; }
+
+    const qty = getInvQty(p);
+
+    if (p.retail_allowed) {
+      unitSel.innerHTML += '<option value="small">' + unitLabel(p, 'small') + ' (فردي)</option>';
+      if ((p.unit_medium_to_small || 1) > 1 || p.unit_medium !== p.unit_small) {
+        unitSel.innerHTML += '<option value="medium">' + unitLabel(p, 'medium') + '</option>';
+      }
+      if (p.unit_large) {
+        unitSel.innerHTML += '<option value="large">' + unitLabel(p, 'large') + '</option>';
+      }
+    } else {
+      // مش قابل للبيع بالتجزئة: خيار "العلبة الكاملة" بس، قاعدة صارمة
+      unitSel.innerHTML += '<option value="small">علبة كاملة</option>';
+      hint.textContent = 'ده صنف مش بيتباع بالتجزئة — بيتباع علبة كاملة بس. المتاح: ' + qty + ' علبة';
+      recalcPrice();
+      return;
+    }
+
+    hint.textContent = 'المتاح حاليًا: ' + qty + ' ' + unitLabel(p, 'small');
+    recalcPrice();
+  }
+
+  function smallUnitsFor(p, level, qty) {
+    const qtyMedium = p.unit_medium_to_small || 1;
+    const qtyLarge = p.unit_large_to_medium || 1;
+    if (level === 'small') return qty;
+    if (level === 'medium') return qty * qtyMedium;
+    if (level === 'large') return qty * qtyMedium * qtyLarge;
+    return qty;
+  }
+
+  function recalcPrice() {
+    const pid = document.getElementById('s_product').value;
+    const p = getProduct(pid);
+    const level = document.getElementById('s_unit').value;
+    const qty = parseFloat(document.getElementById('s_qty').value) || 0;
+    if (!p || !p.default_sale_price) return;
+
+    // سعر البيع متخزن كسعر "العلبة" (أعلى مستوى)، نحسب سعر الوحدة الفردية بالقسمة عليه
+    const totalSmallPerBox = (p.unit_large_to_medium || 1) * (p.unit_medium_to_small || 1);
+    const pricePerSmall = p.default_sale_price / totalSmallPerBox;
+    const smallQty = smallUnitsFor(p, level, qty);
+    document.getElementById('s_price').value = (pricePerSmall * smallQty).toFixed(2);
+  }
+
+  document.getElementById('s_sale_type').addEventListener('change', (e) => {
+    document.getElementById('customer_wrap').classList.toggle('hidden', e.target.value !== 'credit');
+    document.getElementById('newCustomerRow').classList.add('hidden');
+  });
+
+  document.getElementById('s_customer').addEventListener('change', (e) => {
+    document.getElementById('newCustomerRow').classList.toggle('hidden', e.target.value !== '__new__');
+  });
+
+  async function loadCustomers() {
+    const { data, error } = await sb.from('customers').select('id, name').order('name');
+    if (error) return;
+    customersCache = data || [];
+    const sel = document.getElementById('s_customer');
+    sel.innerHTML = '<option value="">-- اختار عميل --</option>' +
+      customersCache.map(c => '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>').join('') +
+      '<option value="__new__">+ عميل جديد</option>';
+  }
+
+  // ------------------------------------------------------------
+  // السلة: تجميع أكتر من صنف في عملية بيع واحدة (زي الروشتة)
+  // ------------------------------------------------------------
+  let cart = [];
+
+  document.getElementById('addToCartBtn').addEventListener('click', () => {
+    const pid = document.getElementById('s_product').value;
+    const level = document.getElementById('s_unit').value;
+    const qty = parseFloat(document.getElementById('s_qty').value) || 0;
+    const price = parseFloat(document.getElementById('s_price').value);
+    const p = getProduct(pid);
+
+    if (!p || qty <= 0) {
+      showAddCartMsg('اختار منتج وكمية صحيحة', 'error');
+      return;
+    }
+    if (isNaN(price) || price <= 0) {
+      showAddCartMsg('السعر لازم يكون أكبر من صفر — اكتب سعر المنتج', 'error');
+      return;
+    }
+
+    const smallQty = smallUnitsFor(p, level, qty);
+    const alreadyInCart = cart.filter(c => c.product_id === pid).reduce((s, c) => s + c.smallQty, 0);
+    const currentStock = getInvQty(p);
+
+    if (smallQty + alreadyInCart > currentStock) {
+      showAddCartMsg('الكمية أكبر من المتاح (المتاح: ' + (currentStock - alreadyInCart) + ' ' + unitLabel(p, 'small') + ')', 'error');
+      return;
+    }
+
+    cart.push({
+      product_id: pid,
+      name: p.name,
+      unit_sold: level === 'small' ? p.unit_small : (level === 'medium' ? p.unit_medium : p.unit_large),
+      unit_label: unitLabel(p, level),
+      quantity: qty,
+      smallQty: smallQty,
+      ratioToSmall: smallQty / qty,
+      price: price
+    });
+
+    document.getElementById('s_qty').value = 1;
+    document.getElementById('s_price').value = '';
+    showAddCartMsg('اتضاف للسلة ✅', 'ok');
+    renderCart();
+  });
+
+  function showAddCartMsg(text, type) {
+    const el = document.getElementById('addCartMsg');
+    el.textContent = text;
+    el.className = 'msg ' + type;
+  }
+
+  function renderCart() {
+    const wrap = document.getElementById('cartWrap');
+    if (cart.length === 0) {
+      wrap.innerHTML = '';
+      recalcTotals();
+      return;
+    }
+    let html = '<table><thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th><th></th></tr></thead><tbody>';
+    cart.forEach((item, i) => {
+      html += '<tr>' +
+        '<td>' + escapeHtml(item.name) + '</td>' +
+        '<td><input type="number" min="1" value="' + item.quantity + '" style="width:60px;padding:6px;font-size:13px;margin-bottom:0;" ' +
+          'onchange="updateCartQty(' + i + ', this.value)"> ' + escapeHtml(item.unit_label) + '</td>' +
+        '<td><input type="number" min="0" step="0.01" value="' + item.price.toFixed(2) + '" style="width:70px;padding:6px;font-size:13px;margin-bottom:0;" ' +
+          'onchange="updateCartPrice(' + i + ', this.value)"> ج</td>' +
+        '<td><button type="button" class="small danger" onclick="removeFromCart(' + i + ')">حذف</button></td>' +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+    recalcTotals();
+  }
+
+  window.updateCartQty = function(index, newQtyRaw) {
+    const item = cart[index];
+    const newQty = parseFloat(newQtyRaw);
+    if (isNaN(newQty) || newQty <= 0) { renderCart(); return; }
+
+    const newSmallQty = newQty * item.ratioToSmall;
+    const product = getProduct(item.product_id);
+    const currentStock = product ? getInvQty(product) : Infinity;
+    const otherInCart = cart.filter((c, idx) => idx !== index && c.product_id === item.product_id).reduce((s, c) => s + c.smallQty, 0);
+
+    if (newSmallQty + otherInCart > currentStock) {
+      alert('الكمية أكبر من المتاح (المتاح: ' + (currentStock - otherInCart) + ' ' + unitLabel(product, 'small') + ')');
+      renderCart();
+      return;
+    }
+
+    // نحافظ على نفس سعر الوحدة ونحدّث السعر الإجمالي حسب الكمية الجديدة
+    const pricePerUnit = item.quantity > 0 ? (item.price / item.quantity) : 0;
+    item.quantity = newQty;
+    item.smallQty = newSmallQty;
+    item.price = pricePerUnit * newQty;
+    renderCart();
+  };
+
+  window.updateCartPrice = function(index, newPriceRaw) {
+    const newPrice = parseFloat(newPriceRaw);
+    if (isNaN(newPrice) || newPrice < 0) { renderCart(); return; }
+    cart[index].price = newPrice;
+    renderCart();
+  };
+
+  window.removeFromCart = function(index) {
+    cart.splice(index, 1);
+    renderCart();
+  };
+
+  function recalcTotals() {
+    const subtotal = cart.reduce((s, i) => s + i.price, 0);
+    const discountType = document.getElementById('s_discount_type').value;
+    const discountValue = parseFloat(document.getElementById('s_discount_value').value) || 0;
+
+    let discount = 0;
+    if (discountType === 'percent') discount = subtotal * (discountValue / 100);
+    else if (discountType === 'fixed') discount = discountValue;
+    discount = Math.min(discount, subtotal);
+
+    const finalTotal = subtotal - discount;
+
+    document.getElementById('subtotalText').textContent = subtotal.toFixed(2) + ' ج';
+    document.getElementById('discountText').textContent = discount.toFixed(2) + ' ج';
+    document.getElementById('finalTotalText').textContent = finalTotal.toFixed(2) + ' ج';
+
+    return { subtotal, discount, finalTotal };
+  }
+
+  document.getElementById('s_discount_type').addEventListener('change', recalcTotals);
+  document.getElementById('s_discount_value').addEventListener('input', recalcTotals);
+
+  let isProcessingSale = false;
+
+  document.getElementById('sellBtn').addEventListener('click', async () => {
+    if (isProcessingSale) return; // منع الضغط المزدوج من إنشاء عملية بيع مكررة
+    isProcessingSale = true;
+
+    const sellBtn = document.getElementById('sellBtn');
+    sellBtn.disabled = true;
+    const saleType = document.getElementById('s_sale_type').value;
+
+    // لو السلة فاضية خالص وفيه منتج مكتوب في الفورم، ناخده كصنف واحد مباشرة (وضع البيع السريع)
+    if (cart.length === 0) {
+      document.getElementById('addToCartBtn').click();
+    }
+
+    if (cart.length === 0) {
+      showSellMsg('السلة فاضية، اختار منتج وكمية الأول', 'error');
+      sellBtn.disabled = false;
+      isProcessingSale = false;
+      return;
+    }
+
+    const zeroItem = cart.find(i => !i.price || i.price <= 0);
+    if (zeroItem) {
+      showSellMsg('⚠️ "' + zeroItem.name + '" في السلة من غير سعر — عدّل سعره أو احذفه قبل التأكيد', 'error');
+      sellBtn.disabled = false;
+      isProcessingSale = false;
+      return;
+    }
+
+    const { subtotal, finalTotal } = recalcTotals();
+    const discountRatio = subtotal > 0 ? (finalTotal / subtotal) : 1;
+
+    sellBtn.textContent = 'جاري الحفظ...';
+
+    try {
+      let customerId = null;
+
+      if (saleType === 'credit') {
+        const custSel = document.getElementById('s_customer').value;
+        if (custSel === '__new__') {
+          const newName = document.getElementById('s_new_customer_name').value.trim();
+          const newPhone = document.getElementById('s_new_customer_phone').value.trim();
+          if (!newName) throw new Error('لازم تكتب اسم العميل الجديد');
+          const { data: newCust, error: custErr } = await sb
+            .from('customers').insert({ name: newName, phone: newPhone || null }).select().single();
+          if (custErr) throw custErr;
+          customerId = newCust.id;
+        } else if (custSel) {
+          customerId = custSel;
+        } else {
+          throw new Error('اختار عميل أو أضف عميل جديد للبيع الآجل');
+        }
+      }
+
+      const groupId = crypto.randomUUID();
+
+      for (const item of cart) {
+        const adjustedPrice = item.price * discountRatio;
+
+        const { error: saleError } = await sb.from('sales').insert({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          unit_sold: item.unit_sold,
+          sale_price: adjustedPrice,
+          customer_id: customerId,
+          employee_id: currentUser.id,
+          sale_group_id: groupId
+        });
+        if (saleError) throw saleError;
+
+        const p = getProduct(item.product_id);
+        const currentStock = getInvQty(p);
+        const { error: invError } = await sb
+          .from('inventory')
+          .update({ quantity_smallest_unit: currentStock - item.smallQty })
+          .eq('product_id', item.product_id);
+        if (invError) throw invError;
+
+        // نحدّث نسخة المخزون المحلية عشان لو فيه صنف تاني في نفس السلة يتحسب صح
+        if (p && p.inventory) {
+          const row = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
+          if (row) row.quantity_smallest_unit = currentStock - item.smallQty;
+        }
+      }
+
+      if (customerId) {
+        await sb.from('customer_ledger').insert({
+          customer_id: customerId,
+          amount: finalTotal,
+          note: 'بيع آجل (' + cart.length + ' صنف)',
+          created_by: currentUser.id
+        });
+      }
+
+      showSellMsg('تمت عملية البيع بنجاح ✅ (' + cart.length + ' صنف، الإجمالي: ' + finalTotal.toFixed(2) + ' ج)', 'ok');
+      cart = [];
+      renderCart();
+      document.getElementById('s_discount_type').value = 'none';
+      document.getElementById('s_discount_value').value = 0;
+      document.getElementById('s_new_customer_name').value = '';
+      document.getElementById('s_new_customer_phone').value = '';
+      await loadProducts();
+      await loadCustomers();
+      await loadRecentSales();
+      updateUnitOptions();
+    } catch (err) {
+      showSellMsg('حصل خطأ: ' + (err.message || JSON.stringify(err)), 'error');
+    } finally {
+      sellBtn.disabled = false;
+      sellBtn.textContent = '✅ تأكيد البيع';
+      isProcessingSale = false;
+    }
+  });
+
+  function showSellMsg(text, type) {
+    const el = document.getElementById('sellMsg');
+    el.textContent = text;
+    el.className = 'msg ' + type;
+  }
+
+  let currentSalesRange = 'today';
+  let customFromDate = null;
+  let customToDate = null;
+
+  function getRangeStart(range) {
+    const now = new Date();
+    if (range === 'today') return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+    if (range === 'week') { const d = new Date(now); d.setDate(d.getDate() - 7); return d.toISOString(); }
+    if (range === 'month') { const d = new Date(now); d.setMonth(d.getMonth() - 1); return d.toISOString(); }
+    return null; // 'all'
+  }
+
+  document.querySelectorAll('.rangeBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.rangeBtn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('customFrom').classList.add('hidden');
+      document.getElementById('customTo').classList.add('hidden');
+      currentSalesRange = btn.dataset.range;
+      customFromDate = null;
+      customToDate = null;
+      loadRecentSales();
+    });
+  });
+
+  document.getElementById('customRangeBtn').addEventListener('click', () => {
+    const fromEl = document.getElementById('customFrom');
+    const toEl = document.getElementById('customTo');
+    if (fromEl.classList.contains('hidden')) {
+      fromEl.classList.remove('hidden');
+      toEl.classList.remove('hidden');
+      return;
+    }
+    document.querySelectorAll('.rangeBtn').forEach(b => b.classList.remove('active'));
+    currentSalesRange = 'custom';
+    customFromDate = fromEl.value || null;
+    customToDate = toEl.value || null;
+    loadRecentSales();
+  });
+
+  async function loadRecentSales() {
+    const wrap = document.getElementById('salesTableWrap');
+    document.getElementById('adminSalesTools').classList.toggle('hidden', !isAdmin);
+    document.getElementById('salesListTitle').textContent = isAdmin ? '🕒 كل عمليات البيع' : '🕒 عملياتي الأخيرة';
+
+    let query = sb.from('sales')
+      .select('id, quantity, unit_sold, sale_price, created_at, product_id, products(name, unit_small, unit_medium, unit_large, unit_medium_to_small, unit_large_to_medium), profiles(full_name), customers(name)')
+      .order('created_at', { ascending: false });
+
+    if (isAdmin) {
+      if (currentSalesRange === 'custom') {
+        if (customFromDate) query = query.gte('created_at', customFromDate);
+        if (customToDate) { const d = new Date(customToDate); d.setDate(d.getDate() + 1); query = query.lt('created_at', d.toISOString()); }
+      } else {
+        const start = getRangeStart(currentSalesRange);
+        if (start) query = query.gte('created_at', start);
+      }
+    } else {
+      query = query.limit(30);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      wrap.innerHTML = '<p class="msg error">تعذّر تحميل المبيعات: ' + error.message + '</p>';
+      return;
+    }
+    if (!data || data.length === 0) {
+      wrap.innerHTML = '<p class="loading">لا توجد عمليات بيع في المدة دي</p>';
+      window._salesCache = [];
+      return;
+    }
+
+    window._salesCache = data;
+
+    let html = '<table><thead><tr><th>المنتج</th><th>الكمية</th><th>السعر</th><th>البائع</th><th>العميل</th><th>الوقت</th>' + (isAdmin ? '<th>إجراءات</th>' : '') + '</tr></thead><tbody>';
+    for (const s of data) {
+      html += '<tr>' +
+        '<td>' + escapeHtml(s.products ? s.products.name : '—') + '</td>' +
+        '<td>' + s.quantity + ' ' + (UNIT_LABELS[s.unit_sold] || s.unit_sold) + '</td>' +
+        '<td>' + s.sale_price + ' ج</td>' +
+        '<td>' + escapeHtml(s.profiles ? s.profiles.full_name : '—') + '</td>' +
+        '<td>' + (s.customers ? escapeHtml(s.customers.name) : 'كاش') + '</td>' +
+        '<td>' + new Date(s.created_at).toLocaleString('ar-EG') + '</td>';
+      if (isAdmin) {
+        html += '<td>' +
+          '<button class="small secondary" onclick="editSalePrice(\'' + s.id + '\')">تعديل</button> ' +
+          '<button class="small danger" onclick="deleteSale(\'' + s.id + '\')">حذف</button>' +
+          '</td>';
+      }
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  window.editSalePrice = async function(saleId) {
+    const s = (window._salesCache || []).find(x => x.id === saleId);
+    if (!s) return;
+    const p = s.products;
+    if (!p) { alert('تعذّر تحميل بيانات المنتج لهذه العملية'); return; }
+
+    if (!confirm('التعديل هيمسح العملية دي ويرجّع كميتها للمخزون، وبعدين تقدر تعمل البيعة من جديد بالتفاصيل اللي تحبها. تكمل؟')) return;
+
+    try {
+      // 1) نرجّع الكمية القديمة للمخزون ونمسح العملية القديمة (بالظبط زي حذف البيعة)
+      const qtyMedium = p.unit_medium_to_small || 1;
+      const qtyLarge = p.unit_large_to_medium || 1;
+      let oldSmallQty = s.quantity;
+      if (s.unit_sold === p.unit_medium) oldSmallQty = s.quantity * qtyMedium;
+      else if (s.unit_sold === p.unit_large) oldSmallQty = s.quantity * qtyMedium * qtyLarge;
+
+      const { error: delError } = await sb.from('sales').delete().eq('id', saleId);
+      if (delError) throw delError;
+
+      const { data: invRow, error: invSelErr } = await sb.from('inventory').select('quantity_smallest_unit').eq('product_id', s.product_id).single();
+      if (invSelErr) throw invSelErr;
+
+      const { data: updatedInv, error: invError } = await sb.from('inventory')
+        .update({ quantity_smallest_unit: (invRow.quantity_smallest_unit || 0) + oldSmallQty })
+        .eq('product_id', s.product_id)
+        .select();
+      if (invError) throw invError;
+      if (!updatedInv || updatedInv.length === 0) {
+        alert('⚠️ تعذّر إرجاع الكمية للمخزون تلقائيًا، راجعها يدويًا');
+      }
+
+      await loadProducts();
+      await loadRecentSales();
+
+      // 2) نجهّز فورم البيع بنفس بيانات العملية القديمة عشان تعدّل أي حاجة فيها وتأكدها من جديد
+      document.getElementById('s_product').value = s.product_id;
+      updateUnitOptions();
+      document.getElementById('s_unit').value =
+        s.unit_sold === p.unit_large ? 'large' : (s.unit_sold === p.unit_medium ? 'medium' : 'small');
+      document.getElementById('s_qty').value = s.quantity;
+      document.getElementById('s_price').value = s.sale_price;
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      showSellMsg('البيانات القديمة اتحمّلت في الفورم فوق — عدّل اللي عايزه وادوس "أضف للسلة" ثم "تأكيد البيع"', 'ok');
+    } catch (err) {
+      alert('حصل خطأ: ' + err.message);
+    }
+  };
+
+  window.deleteSale = async function(saleId) {
+    const s = (window._salesCache || []).find(x => x.id === saleId);
+    if (!s) return;
+    if (!confirm('متأكد إنك عايز تمسح عملية البيع دي؟ الكمية هترجع تلقائي للمخزون.')) return;
+
+    try {
+      const p = s.products;
+      let smallQty = s.quantity;
+      if (p) {
+        const qtyMedium = p.unit_medium_to_small || 1;
+        const qtyLarge = p.unit_large_to_medium || 1;
+        if (s.unit_sold === p.unit_medium) smallQty = s.quantity * qtyMedium;
+        else if (s.unit_sold === p.unit_large) smallQty = s.quantity * qtyMedium * qtyLarge;
+      }
+
+      const { error: delError } = await sb.from('sales').delete().eq('id', saleId);
+      if (delError) throw delError;
+
+      const { data: invRow, error: invSelErr } = await sb.from('inventory').select('quantity_smallest_unit').eq('product_id', s.product_id).single();
+      if (invSelErr) throw invSelErr;
+
+      const { data: updatedInv, error: invError } = await sb.from('inventory')
+        .update({ quantity_smallest_unit: (invRow.quantity_smallest_unit || 0) + smallQty })
+        .eq('product_id', s.product_id)
+        .select();
+      if (invError) throw invError;
+      if (!updatedInv || updatedInv.length === 0) {
+        alert('⚠️ اتمسحت عملية البيع، لكن الكمية ماترجعتش للمخزون فعليًا (تحديث مرفوض). راجع المخزون يدويًا لهذا الصنف.');
+      }
+
+      await loadRecentSales();
+      await loadProducts();
+    } catch (err) {
+      alert('حصل خطأ: ' + err.message);
+    }
+  };
+
+  document.getElementById('exportSalesBtn').addEventListener('click', () => {
+    const data = window._salesCache || [];
+    if (data.length === 0) { alert('مفيش بيانات للتصدير في المدة المختارة'); return; }
+
+    const rows = data.map(s => ({
+      'المنتج': s.products ? s.products.name : '—',
+      'الكمية': s.quantity,
+      'الوحدة': UNIT_LABELS[s.unit_sold] || s.unit_sold,
+      'السعر': s.sale_price,
+      'البائع': s.profiles ? s.profiles.full_name : '—',
+      'العميل': s.customers ? s.customers.name : 'كاش',
+      'الوقت': new Date(s.created_at).toLocaleString('ar-EG')
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'المبيعات');
+    XLSX.writeFile(wb, 'مبيعات_الصيدلية.xlsx');
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+</script>
+
+</body>
+</html>
