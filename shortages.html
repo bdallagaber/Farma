@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>النواقص - نظام إدارة الصيدلية</title>
+<script src="supabase-lib.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="has-sidebar">
+
+<header>
+  <button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1>
+  <div>
+    <span class="userinfo" id="userinfo"></span>
+    <button id="logoutBtn" style="margin-right:8px;">خروج</button>
+  </div>
+</header>
+
+<nav>
+  <a href="inventory.html">المخزون</a>
+  <a href="sales.html">المبيعات</a>
+  <a href="shortages.html" class="active">النواقص</a>
+  <a href="expenses.html">المصروفات</a>
+  <a href="profit.html">الأرباح</a>
+  <a href="search.html">🔍 بحث الأدوية</a>
+  <a href="users.html">الإعدادات</a>
+</nav>
+<div id="sidebarOverlay" class="sidebar-overlay"></div>
+<div class="main-content">
+
+<div class="card">
+  <h2>⚠️ أصناف وصلت للحد الأدنى</h2>
+  <p class="sub">اختار "تم الطلب" واكتب عدد العلب — المخزون هيتحدّث والصنف هيختفي من هنا تلقائي</p>
+  <div id="lowStockWrap"><p class="loading">جاري التحميل...</p></div>
+</div>
+
+<div class="card">
+  <h2>⏳ أصناف قربت تنتهي صلاحيتها</h2>
+  <p class="sub">تنبيه قبل انتهاء الصلاحية بـ 5 شهور</p>
+  <div id="expiryWrap"><p class="loading">جاري التحميل...</p></div>
+</div>
+
+</div>
+<script src="config.js"></script>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">JS Error: ' + msg + ' (line ' + line + ')</div>');
+  };
+  window.onunhandledrejection = function(e) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>');
+  };
+
+  const UNIT_LABELS = {
+    box: 'علبة', strip: 'شريط', piece: 'قطعة',
+    ampoule: 'أمبولة', sachet: 'كيس', other: 'أخرى'
+  };
+
+  let currentUserId = null;
+
+  (async () => {
+    const auth = await requireAuth();
+    if (!auth) return;
+    if (!guardPageAccess(auth.profile, 'shortages')) return;
+    currentUserId = auth.user.id;
+    document.getElementById('userinfo').textContent =
+      auth.profile.full_name + ' (' + (auth.profile.role === 'admin' ? 'أدمن' : 'موظف') + ')';
+
+    await loadLowStock();
+    await loadExpiring();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  async function loadLowStock() {
+    const wrap = document.getElementById('lowStockWrap');
+    // الـ view "shortages" بيقارن المخزون بالحد الأدنى تلقائيًا من قاعدة البيانات
+    const { data, error } = await sb
+      .from('shortages')
+      .select('product_id, name, quantity_smallest_unit, min_stock_threshold');
+
+    if (error) {
+      wrap.innerHTML = '<p style="color:#f28b82;">تعذّر تحميل النواقص: ' + error.message + '</p>';
+      return;
+    }
+    if (!data || data.length === 0) {
+      wrap.innerHTML = '<p class="empty-ok">✅ مفيش أصناف ناقصة دلوقتي</p>';
+      return;
+    }
+
+    const ids = data.map(s => s.product_id);
+    const { data: unitsData } = await sb.from('products').select('id, unit_large_to_medium, unit_medium_to_small').in('id', ids);
+    const unitsMap = {};
+    (unitsData || []).forEach(u => { unitsMap[u.id] = u; });
+
+    const { data: checklist } = await sb.from('order_checklist').select('product_id, status');
+    const checklistMap = {};
+    (checklist || []).forEach(c => { checklistMap[c.product_id] = c.status; });
+
+    window._shortagesUnitsMap = unitsMap;
+
+    let html = '<table><thead><tr><th>المنتج</th><th>المتاح</th><th>الحد الأدنى</th><th>الطلب</th><th>الكمية (عدد علب)</th></tr></thead><tbody>';
+    for (const s of data) {
+      const isZero = s.quantity_smallest_unit <= 0;
+      const status = checklistMap[s.product_id] || '';
+      const selClass = status === 'ordered' ? 'ordered-sel' : (status === 'unavailable' ? 'unavailable-sel' : '');
+
+      html += '<tr>' +
+        '<td>' + escapeHtml(s.name) + '</td>' +
+        '<td class="' + (isZero ? 'critical' : 'warning') + '">' + s.quantity_smallest_unit + (isZero ? ' (خلص!)' : '') + '</td>' +
+        '<td>' + s.min_stock_threshold + '</td>' +
+        '<td><select class="status-select ' + selClass + '" onchange="onStatusChange(this, \'' + s.product_id + '\')">' +
+          '<option value=""' + (status === '' ? ' selected' : '') + '></option>' +
+          '<option value="ordered"' + (status === 'ordered' ? ' selected' : '') + '>تم الطلب</option>' +
+          '<option value="unavailable"' + (status === 'unavailable' ? ' selected' : '') + '>لم يتم</option>' +
+        '</select></td>' +
+        '<td><input type="number" min="1" class="qty-input" id="qty_' + s.product_id + '" placeholder="عدد العلب" ' +
+          'onkeydown="if(event.key===\'Enter\') confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')" ' +
+          'onblur="confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')"></td>' +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  window.onStatusChange = async function(selectEl, productId) {
+    const status = selectEl.value;
+    selectEl.className = 'status-select ' + (status === 'ordered' ? 'ordered-sel' : (status === 'unavailable' ? 'unavailable-sel' : ''));
+
+    if (status === '') {
+      await sb.from('order_checklist').delete().eq('product_id', productId);
+      return;
+    }
+    await sb.from('order_checklist').upsert({
+      product_id: productId, status, updated_at: new Date().toISOString(), updated_by: currentUserId
+    });
+
+    if (status === 'ordered') {
+      const qtyInput = document.getElementById('qty_' + productId);
+      qtyInput.focus();
+    }
+  };
+
+  window.confirmOrder = async function(productId, currentSmallQty) {
+    const qtyInput = document.getElementById('qty_' + productId);
+    const boxesOrdered = parseFloat(qtyInput.value);
+    if (!boxesOrdered || boxesOrdered <= 0) return; // لسه ماكتبش كمية، منعملش حاجة
+
+    const rowSelect = qtyInput.closest('tr').querySelector('.status-select');
+    if (rowSelect.value !== 'ordered') return; // نفّذ بس لو "تم الطلب" مختارة
+
+    const units = (window._shortagesUnitsMap || {})[productId] || {};
+    const perBox = (units.unit_large_to_medium || 1) * (units.unit_medium_to_small || 1);
+    const addedSmallQty = boxesOrdered * perBox;
+
+    const { data: updatedInv, error } = await sb.from('inventory')
+      .update({ quantity_smallest_unit: currentSmallQty + addedSmallQty })
+      .eq('product_id', productId)
+      .select();
+
+    if (error) { alert('حصل خطأ: ' + error.message); return; }
+    if (!updatedInv || updatedInv.length === 0) { alert('تعذّر تحديث المخزون، جرّب تسجّل خروج ودخول تاني'); return; }
+
+    // خلصنا، نمسح تحديد الطلب ونحدّث القائمة (الصنف هيختفي تلقائي لو بقى فوق الحد الأدنى)
+    await sb.from('order_checklist').delete().eq('product_id', productId);
+    await loadLowStock();
+  };
+
+  async function loadExpiring() {
+    const wrap = document.getElementById('expiryWrap');
+    const fiveMonthsFromNow = new Date();
+    fiveMonthsFromNow.setMonth(fiveMonthsFromNow.getMonth() + 5);
+    const cutoff = fiveMonthsFromNow.toISOString().split('T')[0];
+
+    const { data, error } = await sb
+      .from('products')
+      .select('id, name, expiry_date')
+      .not('expiry_date', 'is', null)
+      .lte('expiry_date', cutoff)
+      .order('expiry_date');
+
+    if (error) {
+      wrap.innerHTML = '<p style="color:#f28b82;">تعذّر تحميل بيانات الصلاحية: ' + error.message + '</p>';
+      return;
+    }
+    if (!data || data.length === 0) {
+      wrap.innerHTML = '<p class="empty-ok">✅ مفيش أصناف قربت تنتهي صلاحيتها</p>';
+      return;
+    }
+
+    const today = new Date();
+    let html = '<table><thead><tr><th>المنتج</th><th>تاريخ الانتهاء</th><th>الحالة</th></tr></thead><tbody>';
+    for (const p of data) {
+      const expiry = new Date(p.expiry_date);
+      const isExpired = expiry < today;
+      html += '<tr>' +
+        '<td>' + escapeHtml(p.name) + '</td>' +
+        '<td>' + p.expiry_date + '</td>' +
+        '<td class="' + (isExpired ? 'critical' : 'warning') + '">' + (isExpired ? 'منتهي بالفعل ❌' : 'قربت تنتهي ⏳') + '</td>' +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+</script>
+
+</body>
+</html>
