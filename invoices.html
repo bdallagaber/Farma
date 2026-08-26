@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>الفواتير - نظام إدارة الصيدلية</title>
+<script src="supabase-lib.js"></script>
+<link rel="stylesheet" href="style.css">
+<style>
+  .invoice-row { cursor: pointer; }
+  .invoice-modal {
+    position: fixed; inset: 0; background: rgba(15,23,27,0.5);
+    display: flex; align-items: flex-start; justify-content: center;
+    z-index: 1000; padding: 20px; overflow-y: auto;
+  }
+  .invoice-paper {
+    background: #fff; border-radius: 10px; padding: 28px;
+    max-width: 480px; width: 100%; margin-top: 20px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.25);
+  }
+  .invoice-header { text-align: center; margin-bottom: 18px; padding-bottom: 14px; border-bottom: 2px solid var(--border); }
+  .invoice-header h2 { font-size: 18px; color: var(--primary-dark); margin-bottom: 4px; }
+  .invoice-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-muted); margin-bottom: 16px; }
+  .invoice-table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
+  .invoice-table th, .invoice-table td { padding: 8px 4px; text-align: right; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .invoice-total-row { display: flex; justify-content: space-between; font-size: 15px; font-weight: 700; padding-top: 10px; border-top: 2px solid var(--border); color: var(--primary-dark); }
+  .invoice-actions { display: flex; gap: 8px; margin-top: 18px; }
+
+  @media print {
+    body * { visibility: hidden; }
+    .invoice-paper, .invoice-paper * { visibility: visible; }
+    .invoice-paper { position: absolute; top: 0; right: 0; left: 0; box-shadow: none; max-width: 100%; }
+    .invoice-actions { display: none !important; }
+  }
+</style>
+</head>
+<body class="has-sidebar">
+
+<header>
+  <button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1>
+  <div>
+    <span class="userinfo" id="userinfo"></span>
+    <button id="logoutBtn" style="margin-right:8px;">خروج</button>
+  </div>
+</header>
+
+<nav>
+  <a href="inventory.html">المخزون</a>
+  <a href="sales.html">المبيعات</a>
+  <a href="invoices.html" class="active">🧾 الفواتير</a>
+  <a href="shortages.html">النواقص</a>
+  <a href="expenses.html">المصروفات</a>
+  <a href="profit.html">الأرباح</a>
+  <a href="search.html">🔍 بحث الأدوية</a>
+  <a href="users.html">الإعدادات</a>
+</nav>
+<div id="sidebarOverlay" class="sidebar-overlay"></div>
+<div class="main-content">
+
+<div class="card">
+  <h2>🧾 الفواتير</h2>
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="🔍 ابحث باسم العميل أو المنتج..." style="flex:1;min-width:150px;margin-bottom:0;">
+    <select id="rangeFilter" style="width:auto;margin-bottom:0;">
+      <option value="all">كل الوقت</option>
+      <option value="today">اليوم</option>
+      <option value="week">آخر أسبوع</option>
+      <option value="month">آخر شهر</option>
+    </select>
+  </div>
+  <div id="invoicesWrap"><p class="loading">جاري التحميل...</p></div>
+</div>
+
+</div>
+
+<div id="invoiceModal" class="invoice-modal hidden">
+  <div class="invoice-paper" id="invoicePaperContent"></div>
+</div>
+
+<script src="config.js"></script>
+<script>
+  window.onerror = function(msg, url, line) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">JS Error: ' + msg + ' (line ' + line + ')</div>');
+  };
+  window.onunhandledrejection = function(e) {
+    document.body.insertAdjacentHTML('beforeend',
+      '<div style="position:fixed;bottom:0;left:0;right:0;background:#f28b82;color:#000;padding:12px;font-size:12px;direction:ltr;text-align:left;">Promise Error: ' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</div>');
+  };
+
+  const UNIT_LABELS = { box: 'علبة', strip: 'شريط', piece: 'قطعة', ampoule: 'أمبولة', sachet: 'كيس', other: 'أخرى' };
+  let allInvoices = [];
+  let isAdmin = false;
+
+  (async () => {
+    const auth = await requireAuth();
+    if (!auth) return;
+    if (!guardPageAccess(auth.profile, 'sales')) return;
+    isAdmin = auth.profile.role === 'admin';
+
+    document.getElementById('userinfo').textContent =
+      auth.profile.full_name + ' (' + (isAdmin ? 'أدمن' : 'موظف') + ')';
+
+    await loadInvoices();
+  })();
+
+  document.getElementById('logoutBtn').addEventListener('click', async () => {
+    await sb.auth.signOut();
+    window.location.href = 'index.html';
+  });
+
+  async function loadInvoices() {
+    const wrap = document.getElementById('invoicesWrap');
+    const { data, error } = await sb
+      .from('sales')
+      .select('id, sale_group_id, quantity, unit_sold, sale_price, created_at, products(name, name_en), profiles(full_name), customers(name)')
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (error) {
+      wrap.innerHTML = '<p style="color:#dc2626;">تعذّر تحميل الفواتير: ' + error.message + '</p>';
+      return;
+    }
+
+    // نجمّع كل عمليات البيع اللي ليها نفس sale_group_id في فاتورة واحدة
+    // (اللي مالوش مجموعة، بيتعامل معاه كفاتورة صنف واحد لوحده)
+    const groups = {};
+    (data || []).forEach(s => {
+      const key = s.sale_group_id || ('single-' + s.id);
+      if (!groups[key]) {
+        groups[key] = {
+          key, created_at: s.created_at,
+          customer: s.customers ? s.customers.name : 'كاش',
+          employee: s.profiles ? s.profiles.full_name : '—',
+          items: [], total: 0
+        };
+      }
+      groups[key].items.push(s);
+      groups[key].total += Number(s.sale_price);
+    });
+
+    allInvoices = Object.values(groups).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    renderInvoices();
+  }
+
+  document.getElementById('searchBox').addEventListener('input', renderInvoices);
+  document.getElementById('rangeFilter').addEventListener('change', renderInvoices);
+
+  function renderInvoices() {
+    const wrap = document.getElementById('invoicesWrap');
+    const term = document.getElementById('searchBox').value.trim().toLowerCase();
+    const range = document.getElementById('rangeFilter').value;
+
+    const now = new Date();
+    let cutoff = null;
+    if (range === 'today') cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (range === 'week') cutoff = new Date(now.getTime() - 7 * 86400000);
+    if (range === 'month') cutoff = new Date(now.getTime() - 30 * 86400000);
+
+    const filtered = allInvoices.filter(inv => {
+      if (cutoff && new Date(inv.created_at) < cutoff) return false;
+      if (!term) return true;
+      const hay = (inv.customer + ' ' + inv.items.map(i => (i.products ? i.products.name + ' ' + (i.products.name_en||'') : '')).join(' ')).toLowerCase();
+      return hay.includes(term);
+    });
+
+    if (filtered.length === 0) {
+      wrap.innerHTML = '<p class="loading">مفيش فواتير مطابقة</p>';
+      return;
+    }
+
+    let html = '<table><thead><tr><th>التاريخ</th><th>العميل</th><th>عدد الأصناف</th><th>الإجمالي</th>' + (isAdmin ? '<th>البائع</th>' : '') + '</tr></thead><tbody>';
+    filtered.forEach(inv => {
+      html += '<tr class="invoice-row" onclick="showInvoice(\'' + inv.key + '\')">' +
+        '<td>' + new Date(inv.created_at).toLocaleString('ar-EG') + '</td>' +
+        '<td>' + escapeHtml(inv.customer) + '</td>' +
+        '<td>' + inv.items.length + '</td>' +
+        '<td>' + inv.total.toFixed(2) + ' ج</td>' +
+        (isAdmin ? '<td>' + escapeHtml(inv.employee) + '</td>' : '') +
+        '</tr>';
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+
+  window.showInvoice = function(key) {
+    const inv = allInvoices.find(i => i.key === key);
+    if (!inv) return;
+
+    const shortId = key.replace('single-', '').split('-')[0].toUpperCase();
+    let itemsHtml = '';
+    inv.items.forEach(it => {
+      const name = it.products ? (it.products.name_en || it.products.name) : '—';
+      const unit = UNIT_LABELS[it.unit_sold] || it.unit_sold;
+      itemsHtml += '<tr><td>' + escapeHtml(name) + '</td><td>' + it.quantity + ' ' + unit + '</td><td>' + Number(it.sale_price).toFixed(2) + ' ج</td></tr>';
+    });
+
+    document.getElementById('invoicePaperContent').innerHTML =
+      '<div class="invoice-header">' +
+        '<h2>🧾 فاتورة بيع</h2>' +
+        '<div style="font-size:12px;color:var(--text-muted);">نظام إدارة الصيدلية</div>' +
+      '</div>' +
+      '<div class="invoice-meta">' +
+        '<span>رقم: ' + shortId + '</span>' +
+        '<span>' + new Date(inv.created_at).toLocaleString('ar-EG') + '</span>' +
+      '</div>' +
+      '<div class="invoice-meta">' +
+        '<span>العميل: ' + escapeHtml(inv.customer) + '</span>' +
+        (isAdmin ? '<span>البائع: ' + escapeHtml(inv.employee) + '</span>' : '') +
+      '</div>' +
+      '<table class="invoice-table"><thead><tr><th>الصنف</th><th>الكمية</th><th>السعر</th></tr></thead><tbody>' + itemsHtml + '</tbody></table>' +
+      '<div class="invoice-total-row"><span>الإجمالي</span><span>' + inv.total.toFixed(2) + ' ج</span></div>' +
+      '<div class="invoice-actions">' +
+        '<button onclick="window.print()">🖨️ طباعة</button>' +
+        '<button class="secondary" onclick="closeInvoice()">إغلاق</button>' +
+      '</div>';
+
+    document.getElementById('invoiceModal').classList.remove('hidden');
+  };
+
+  window.closeInvoice = function() {
+    document.getElementById('invoiceModal').classList.add('hidden');
+  };
+  document.getElementById('invoiceModal').addEventListener('click', (e) => {
+    if (e.target.id === 'invoiceModal') closeInvoice();
+  });
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str || '';
+    return div.innerHTML;
+  }
+</script>
+
+</body>
+</html>
