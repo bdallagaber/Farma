@@ -178,6 +178,7 @@
 </div>
 
 <div id="scanModal" class="scan-modal hidden">
+  <button type="button" id="scanCloseX" class="scan-close-x">✕</button>
   <div class="scan-box">
     <p class="scan-msg">وجّه الكاميرا على الباركود أو كود QR</p>
     <video id="scanVideo"></video>
@@ -600,6 +601,7 @@
 
   document.getElementById('scanBtn').addEventListener('click', startScan);
   document.getElementById('closeScanBtn').addEventListener('click', stopScan);
+  document.getElementById('scanCloseX').addEventListener('click', stopScan);
 
   function playBeep() {
     try {
