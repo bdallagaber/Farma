@@ -142,6 +142,15 @@
         <button type="button" id="scanBtn" class="secondary" style="white-space:nowrap;">📷 مسح</button>
       </div>
     </div>
+    <div class="full-width hidden" id="extraBarcodesWrap">
+      <label>باركودات إضافية لنفس المنتج</label>
+      <div id="extraBarcodesList" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;"></div>
+      <div style="display:flex;gap:8px;">
+        <input type="text" id="p_extra_qr" placeholder="اكتب أو امسح باركود إضافي" style="margin-bottom:0;">
+        <button type="button" id="scanExtraBtn" class="secondary" style="white-space:nowrap;">📷 مسح</button>
+        <button type="button" id="addExtraBarcodeBtn" style="white-space:nowrap;">+ جديد</button>
+      </div>
+    </div>
   </div>
   <button id="saveBtn">حفظ المنتج</button>
   <button id="cancelEditBtn" class="secondary hidden" style="margin-right:8px;">إلغاء التعديل</button>
@@ -315,7 +324,7 @@
   function buildCheckboxes(containerId, countId, options, groupClass) {
     const box = document.getElementById(containerId);
     box.innerHTML = options.map(v =>
-      '<label><input type="checkbox" class="' + groupClass + '" value="' + escapeHtml(v) + '"> ' + escapeHtml(v) + '</label>'
+      '<label><input type="checkbox" class="' + groupClass + '" value="' + escapeHtml(v) + '"> ' + escapeHtml(checkboxLabel(v)) + '</label>'
     ).join('');
     box.querySelectorAll('input').forEach(chk => chk.addEventListener('change', () => {
       updateFilterCount(groupClass, countId);
@@ -335,7 +344,11 @@
   function populateFilterDropdowns() {
     buildCheckboxes('filterShapeBox', 'filterShapeCount', customOptions.drug_shape.map(o => o.value), 'shapeChk');
     buildCheckboxes('filterTypeBox', 'filterTypeCount', customOptions.drug_type.map(o => o.value), 'typeChk');
-    buildCheckboxes('filterClassBox', 'filterClassCount', customOptions.classification.map(o => o.value), 'classChk');
+    buildCheckboxes('filterClassBox', 'filterClassCount', ['__unclassified__', ...customOptions.classification.map(o => o.value)], 'classChk');
+  }
+
+  function checkboxLabel(v) {
+    return v === '__unclassified__' ? '⚠️ غير مصنّف' : v;
   }
 
   document.querySelectorAll('.availChk').forEach(chk => chk.addEventListener('change', () => {
@@ -584,8 +597,48 @@
     document.getElementById('p_min_threshold').value = 0;
     document.getElementById('p_purchase_price').value = '';
     document.getElementById('p_qr').value = '';
+    document.getElementById('extraBarcodesWrap').classList.add('hidden');
+    document.getElementById('extraBarcodesList').innerHTML = '';
+    document.getElementById('p_extra_qr').value = '';
     updateShapeFields();
   }
+
+  async function loadExtraBarcodes(productId) {
+    const wrap = document.getElementById('extraBarcodesList');
+    wrap.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">جاري التحميل...</span>';
+    const { data, error } = await sb.from('product_barcodes').select('id, barcode').eq('product_id', productId).order('created_at');
+    if (error) { wrap.innerHTML = ''; return; }
+    if (!data || data.length === 0) { wrap.innerHTML = '<span style="font-size:12px;color:var(--text-muted);">مفيش باركودات إضافية</span>'; return; }
+
+    wrap.innerHTML = data.map(b =>
+      '<span class="tag" style="display:flex;align-items:center;gap:6px;">' + escapeHtml(b.barcode) +
+      '<button type="button" onclick="removeExtraBarcode(\'' + b.id + '\', \'' + productId + '\')" style="background:none;border:none;color:var(--danger);cursor:pointer;padding:0;font-size:13px;">✕</button>' +
+      '</span>'
+    ).join('');
+  }
+
+  document.getElementById('addExtraBarcodeBtn').addEventListener('click', async () => {
+    if (!editingProductId) return;
+    const code = document.getElementById('p_extra_qr').value.trim();
+    if (!code) { alert('اكتب أو امسح باركود الأول'); return; }
+
+    const { error } = await sb.from('product_barcodes').insert({ product_id: editingProductId, barcode: code });
+    if (error) {
+      alert(error.message.includes('duplicate') || error.code === '23505'
+        ? 'الباركود ده متسجّل بالفعل لمنتج (ممكن يكون نفس المنتج ده)'
+        : 'حصل خطأ: ' + error.message);
+      return;
+    }
+    document.getElementById('p_extra_qr').value = '';
+    await loadExtraBarcodes(editingProductId);
+  });
+
+  window.removeExtraBarcode = async function(barcodeRowId, productId) {
+    if (!confirm('متأكد إنك عايز تمسح الباركود ده؟')) return;
+    const { error } = await sb.from('product_barcodes').delete().eq('id', barcodeRowId);
+    if (error) { alert('حصل خطأ: ' + error.message); return; }
+    await loadExtraBarcodes(productId);
+  };
 
   function showAddMsg(text, type) {
     const el = document.getElementById('addMsg');
@@ -599,7 +652,8 @@
   let nativeDetectorStream = null;
   let nativeDetectorLoop = null;
 
-  document.getElementById('scanBtn').addEventListener('click', startScan);
+  document.getElementById('scanBtn').addEventListener('click', () => { scanTarget = 'p_qr'; startScan(); });
+  document.getElementById('scanExtraBtn').addEventListener('click', () => { scanTarget = 'p_extra_qr'; startScan(); });
   document.getElementById('closeScanBtn').addEventListener('click', stopScan);
   document.getElementById('scanCloseX').addEventListener('click', stopScan);
 
@@ -618,8 +672,16 @@
     } catch (e) { /* تجاهل لو المتصفح مانع الصوت */ }
   }
 
+  let scanTarget = 'p_qr';
+
   function handleScanResult(code) {
     playBeep();
+    if (scanTarget === 'p_extra_qr') {
+      document.getElementById('p_extra_qr').value = code;
+      document.getElementById('scanStatus').textContent = 'تم المسح ✅ — دوس "+ جديد" لإضافته';
+      stopScan();
+      return;
+    }
     document.getElementById('p_qr').value = code;
     const existing = (window._productsCache || []).find(p => p.qr_code === code);
     const status = document.getElementById('scanStatus');
@@ -783,7 +845,11 @@
       if (term && !fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term)) return false;
       if (shapeFilters.length && !shapeFilters.includes(p.shape)) return false;
       if (typeFilters.length && !typeFilters.includes(p.drug_type)) return false;
-      if (classFilters.length && !classFilters.includes(p.classification)) return false;
+      if (classFilters.length) {
+        const isUnclassified = !p.classification;
+        const matches = classFilters.includes(p.classification) || (isUnclassified && classFilters.includes('__unclassified__'));
+        if (!matches) return false;
+      }
       if (availFilters.length) {
         const matches =
           (availFilters.includes('available') && isAvailable) ||
@@ -876,6 +942,8 @@
     document.getElementById('p_min_threshold').value = p.min_stock_threshold || 0;
     document.getElementById('p_box_price').value = p.default_sale_price || '';
     document.getElementById('p_qr').value = p.qr_code || '';
+    document.getElementById('extraBarcodesWrap').classList.remove('hidden');
+    loadExtraBarcodes(id);
 
     const qty = getInvQty(p);
     const field3 = p.unit_large_to_medium || 1;
