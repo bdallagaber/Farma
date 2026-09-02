@@ -50,7 +50,6 @@
       return;
     }
 
-    // الحسابات المحلية القديمة تدخل باسم المستخدم فقط.
     if (!email.includes('@')) {
       email = email + '.pharmacy.local@gmail.com';
     }
@@ -74,16 +73,29 @@
         return;
       }
 
-      const { data: profile, error: profileError } = await sb
-        .from('profiles')
-        .select('role, full_name')
-        .eq('id', data.user.id)
-        .single();
+      let profile = null;
+      let profileError = null;
 
-      if (profileError || !profile) {
-        console.error('Profile lookup error:', profileError);
-        await sb.auth.signOut();
-        showMsg('بيانات الدخول صحيحة، لكن حساب الموظف غير مربوط ببياناته في النظام. تواصل مع الأدمن.', 'error');
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const result = await sb
+          .from('profiles')
+          .select('role, full_name')
+          .eq('id', data.user.id)
+          .single();
+
+        profile = result.data;
+        profileError = result.error;
+
+        if (profile && !profileError) break;
+        console.warn('Profile lookup attempt failed:', profileError);
+        if (attempt < 2) await sleep(500 * (attempt + 1));
+      }
+
+      // مهم: لا نعملش signOut لمجرد إن استعلام profiles فشل مؤقتًا.
+      // الـ session صحيحة بالفعل، ونسيب المستخدم يكمل بدل ما يظهر له logout.
+      if (!profile) {
+        console.error('Profile lookup failed after retries:', profileError);
+        showMsg('تم تسجيل الدخول، لكن تعذر تحميل بيانات الموظف مؤقتًا. جرّب فتح الصفحة تاني بعد لحظات.', 'error');
         return;
       }
 
@@ -100,6 +112,10 @@
       }
     }
   });
+
+  function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
 
   function getLoginErrorMessage(error) {
     const code = String(error?.code || '').toLowerCase();
