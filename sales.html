@@ -108,6 +108,160 @@
   }
 }
 </style>
+
+<style>
+/* =========================================================
+   ضبط نهائي لسلة المبيعات على شاشات الموبايل
+   ========================================================= */
+
+#cartWrap,
+#cartWrap table {
+  box-sizing: border-box;
+}
+
+#cartWrap th,
+#cartWrap td {
+  box-sizing: border-box;
+  vertical-align: middle;
+}
+
+#cartWrap td:last-child,
+#cartWrap th:last-child {
+  text-align: center;
+  vertical-align: middle;
+}
+
+#cartWrap td:last-child button.cart-delete-btn,
+#cartWrap td:last-child button.small.danger {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+  height: 34px;
+  min-height: 34px;
+  width: 52px !important;
+  min-width: 52px !important;
+  max-width: 52px !important;
+  margin: 0 auto !important;
+  padding: 0 6px !important;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  #cartWrap {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 2px 0 6px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #cartWrap table {
+    width: 100%;
+    min-width: 340px;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0 5px;
+  }
+
+  #cartWrap th,
+  #cartWrap td {
+    padding: 7px 4px;
+  }
+
+  /* الصنف يأخذ المساحة الأكبر */
+  #cartWrap th:first-child,
+  #cartWrap td:first-child {
+    width: auto;
+    min-width: 0;
+  }
+
+  /* الكمية + الوحدة */
+  #cartWrap th:nth-child(2),
+  #cartWrap td:nth-child(2) {
+    width: 112px;
+  }
+
+  /* السعر */
+  #cartWrap th:nth-child(3),
+  #cartWrap td:nth-child(3) {
+    width: 76px;
+    text-align: center;
+  }
+
+  /* الحذف */
+  #cartWrap th:last-child,
+  #cartWrap td:last-child {
+    width: 56px !important;
+    min-width: 56px !important;
+    max-width: 56px !important;
+    padding: 7px 2px !important;
+    text-align: center;
+  }
+
+  #cartWrap td:first-child {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    line-height: 1.45;
+  }
+
+  #cartWrap td:nth-child(2) > div {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start;
+    gap: 4px !important;
+    flex-wrap: wrap !important;
+    width: 100%;
+    margin: 0;
+  }
+
+  #cartWrap td:nth-child(2) input[type="number"] {
+    box-sizing: border-box;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 32px;
+    padding: 4px !important;
+    margin: 0 !important;
+    text-align: center;
+  }
+
+  #cartWrap td:nth-child(2) select {
+    box-sizing: border-box;
+    width: 62px !important;
+    min-width: 62px !important;
+    max-width: 62px !important;
+    height: 32px;
+    padding: 4px 3px !important;
+    margin: 0 !important;
+    font-size: 12px !important;
+  }
+
+  #cartWrap td:nth-child(3) input[type="number"] {
+    box-sizing: border-box;
+    width: 68px !important;
+    min-width: 68px !important;
+    max-width: 68px !important;
+    height: 32px;
+    padding: 4px !important;
+    margin: 0 !important;
+    text-align: center;
+  }
+
+  #cartWrap td:last-child button.cart-delete-btn,
+  #cartWrap td:last-child button.small.danger {
+    width: 50px !important;
+    min-width: 50px !important;
+    max-width: 50px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    padding: 0 4px !important;
+    margin: 0 auto !important;
+    font-size: 11px !important;
+  }
+}
+</style>
 </head>
 <body class="has-sidebar">
 
@@ -2485,35 +2639,34 @@ window.updateCartUnit =
     const item =
       cart[index];
 
-
     if (!item) {
       return;
     }
-
 
     const p =
       getProduct(
         item.product_id
       );
 
-
     if (!p) {
       return;
     }
 
-
     /*
-     * الكمية الفعلية الحالية
-     * تظل كما هي.
+     * عند تغيير الوحدة داخل السلة:
+     * نحافظ على الرقم الذي كتبه المستخدم
+     * (مثلاً 1) ونغيّر الوحدة نفسها.
+     *
+     * مثال:
+     * 1 قطعة  ->  1 شريط
+     * 1 قطعة  ->  1 علبة
+     *
+     * وبالتالي لا يحدث Error لمجرد تغيير
+     * وحدة البيع.
      */
-    const oldSmallQty =
-      item.smallQty;
+    const quantity =
+      Number(item.quantity) || 1;
 
-
-    /*
-     * كم أصغر وحدة داخل وحدة واحدة
-     * من المستوى الجديد؟
-     */
     const newRatio =
       smallUnitsFor(
         p,
@@ -2521,79 +2674,85 @@ window.updateCartUnit =
         1
       );
 
-
-    /*
-     * مثال:
-     *
-     * 10 قطع
-     * عند اختيار شريط يحتوي 10 قطع
-     * تصبح 1 شريط
-     *
-     * 30 قطعة
-     * عند اختيار علبة تحتوي 30 قطعة
-     * تصبح 1 علبة
-     */
-    const newQuantity =
-      oldSmallQty /
+    const newSmallQty =
+      quantity *
       newRatio;
 
-
     /*
-     * لا نسمح بتحويل غير كامل
-     *
-     * مثال:
-     * 15 قطعة إلى علب 30
-     * غير ممكن.
+     * التأكد من أن الكمية الجديدة متاحة
+     * مع مراعاة الكميات الموجودة بالفعل
+     * في باقي السلة.
      */
+    const otherCartQty =
+      cart
+        .reduce(
+          (sum, cartItem, cartIndex) =>
+            cartIndex === index ||
+            cartItem.product_id !== item.product_id
+              ? sum
+              : sum + (
+                  Number(cartItem.smallQty) || 0
+                ),
+          0
+        );
+
+    const available =
+      getInvQty(p);
+
     if (
-      !Number.isInteger(
-        newQuantity
-      ) ||
-      newQuantity <= 0
+      otherCartQty +
+      newSmallQty >
+      available
     ) {
 
       alert(
-        'لا يمكن تحويل الكمية الحالية إلى ' +
+        'الكمية المطلوبة من ' +
         unitLabel(
           p,
           newLevel
         ) +
-        ' بشكل صحيح.'
+        ' أكبر من المتاح. المتاح: ' +
+        formatStockAvailability(
+          p,
+          Math.max(
+            0,
+            available -
+            otherCartQty
+          )
+        )
       );
-
 
       renderCart();
 
       return;
-
     }
 
-
     /*
-     * نحافظ على نفس إجمالي السعر
+     * سعر الوحدة الجديدة يُحسب من
+     * سعر أصغر وحدة × عدد الأصغر داخلها.
      */
-    const pricePerSmall =
-      oldSmallQty > 0
-        ? item.price /
-          oldSmallQty
-        : 0;
+    const oldRatio =
+      Number(item.ratioToSmall) || 1;
 
+    const oldPrice =
+      Number(item.price) || 0;
+
+    const pricePerSmall =
+      oldRatio > 0
+        ? oldPrice / oldRatio
+        : 0;
 
     item.level =
       newLevel;
 
-
     item.quantity =
-      newQuantity;
-
+      quantity;
 
     item.smallQty =
-      oldSmallQty;
-
+      newSmallQty;
 
     item.ratioToSmall =
       newRatio;
-
 
     item.unit_sold =
       newLevel === 'small'
@@ -2602,18 +2761,15 @@ window.updateCartUnit =
           ? p.unit_medium
           : p.unit_large;
 
-
     item.unit_label =
       unitLabel(
         p,
         newLevel
       );
 
-
     item.price =
       pricePerSmall *
-      oldSmallQty;
-
+      newRatio;
 
     renderCart();
 
