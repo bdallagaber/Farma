@@ -7,14 +7,23 @@ const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
-    // لا نشغّل auto refresh في كل صفحة؛ التنقل السريع بين الصفحات كان
-    // ينشئ أكثر من عميل ويحاول تدوير نفس refresh token في نفس الوقت.
     autoRefreshToken: false,
     detectSessionInUrl: false,
     storage: window.localStorage,
     storageKey: 'farma-auth'
   }
 });
+
+// امنع ظهور الـ layout القديم ولو لجزء من الثانية أثناء تجهيز الـ sidebar.
+// يتم إظهار الصفحة فور انتهاء setupFarmaSidebar.
+(function installSidebarPreloadGuard() {
+  if (!document.body || !document.body.classList.contains('has-sidebar')) return;
+  if (document.getElementById('farmaSidebarPreloadGuard')) return;
+  const style = document.createElement('style');
+  style.id = 'farmaSidebarPreloadGuard';
+  style.textContent = 'body.has-sidebar:not(.farma-sidebar-ready){visibility:hidden!important;}';
+  document.head.appendChild(style);
+})();
 
 async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -32,7 +41,6 @@ try {
   console.warn('Could not restore cached profile:', err);
 }
 
-// نقرأ الـ session محليًا فقط. لا نعمل refresh أثناء كل انتقال بين الأقسام.
 async function getStableSession() {
   try {
     const { data, error } = await sb.auth.getSession();
@@ -47,11 +55,8 @@ async function getStableSession() {
   return null;
 }
 
-// Refresh وحيد فقط عندما تكون الجلسة منتهية أو على وشك الانتهاء.
-// يتم قفله داخل الصفحة لمنع تزامن أكثر من refresh.
 async function refreshSessionIfNeeded(session) {
   if (!session) return null;
-
   const expiresAt = Number(session.expires_at || 0);
   const now = Math.floor(Date.now() / 1000);
   const needsRefresh = !expiresAt || expiresAt - now <= 120;
@@ -149,7 +154,6 @@ async function requireAuthWithSession(session) {
   };
 }
 
-// لا نعملش redirect من onAuthStateChange.
 sb.auth.onAuthStateChange((event, session) => {
   if (session) farmaLastKnownSession = session;
   console.debug('Farma auth event:', event, session ? 'session-present' : 'no-session');
@@ -179,9 +183,6 @@ function guardPageAccess(profile, pageKey) {
   return true;
 }
 
-// ============================================================
-// Sidebar - تصميم قريب من Daftra مع دعم الكمبيوتر والموبايل
-// ============================================================
 (function loadSidebarStyles() {
   if (document.getElementById('farmaSidebarCss')) return;
   const link = document.createElement('link');
@@ -317,9 +318,6 @@ function setupFarmaSidebar() {
 
 document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
 
-// ============================================================
-// تحميل تحسينات صفحة المخزون
-// ============================================================
 (function loadInventoryEnhancements() {
   const isInventoryPage = /(^|\/)inventory\.html$/i.test(window.location.pathname);
   if (!isInventoryPage) return;
@@ -331,18 +329,12 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   document.head.appendChild(script);
 })();
 
-// ============================================================
-// إصلاح فلترة المبيعات حسب تاريخ القاهرة
-// ============================================================
 (function installCairoSalesDateFix() {
   const isSalesPage = /(^|\/)sales\.html$/i.test(window.location.pathname);
   if (!isSalesPage) return;
 
   const cairoParts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Cairo',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
+    timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit'
   }).formatToParts(new Date());
 
   const getPart = type => {
@@ -350,11 +342,7 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
     return part ? part.value : '';
   };
 
-  const cairoToday = {
-    year: Number(getPart('year')),
-    month: Number(getPart('month')),
-    day: Number(getPart('day'))
-  };
+  const cairoToday = { year: Number(getPart('year')), month: Number(getPart('month')), day: Number(getPart('day')) };
 
   const cairoStartIso = (year, month, day) => {
     return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
@@ -363,20 +351,14 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   const shiftCairoDate = (year, month, day, deltaDays) => {
     const d = new Date(Date.UTC(year, month - 1, day));
     d.setUTCDate(d.getUTCDate() + deltaDays);
-    return {
-      year: d.getUTCFullYear(),
-      month: d.getUTCMonth() + 1,
-      day: d.getUTCDate()
-    };
+    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
   };
 
   const originalGetRangeStart = window.getRangeStart;
 
   setTimeout(() => {
     window.getRangeStart = function(range) {
-      if (range === 'today') {
-        return cairoStartIso(cairoToday.year, cairoToday.month, cairoToday.day);
-      }
+      if (range === 'today') return cairoStartIso(cairoToday.year, cairoToday.month, cairoToday.day);
       if (range === 'week') {
         const start = shiftCairoDate(cairoToday.year, cairoToday.month, cairoToday.day, -7);
         return cairoStartIso(start.year, start.month, start.day);
@@ -389,8 +371,6 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
       return typeof originalGetRangeStart === 'function' ? originalGetRangeStart(range) : null;
     };
 
-    if (typeof window.loadRecentSales === 'function') {
-      window.loadRecentSales();
-    }
+    if (typeof window.loadRecentSales === 'function') window.loadRecentSales();
   }, 0);
 })();
