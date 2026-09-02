@@ -2,7 +2,7 @@
 // إعدادات الاتصال بـ Supabase - ملف مشترك تستخدمه كل صفحات السيستم
 // ============================================================
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ4bnBwdXp1bGZ5eXF3eXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTkyNzEsImV4cCI6MjEwMTUzNTI3MX0.kWCN1qai3IcbkiD30Ng-SmyqJGqTl6BHskNrcDJnEU8";
+const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
