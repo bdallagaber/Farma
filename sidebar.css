@@ -1,44 +1,216 @@
 /* Farma - Daftra-style sidebar */
-.farma-sidebar-ready nav{padding:10px 8px 12px!important;gap:2px;}
-.farma-sidebar-ready nav::before{content:'الأقسام';padding:16px 14px 10px;margin:0 4px 6px;font-size:12px;font-weight:700;color:var(--text-muted);border-bottom:1px solid var(--border);}
-.farma-sidebar-ready nav a{margin:2px 4px;padding:10px 12px;border-radius:9px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;}
-.farma-sidebar-ready nav a.active{background:var(--primary);color:#fff;}
-.farma-sidebar-ready nav a:hover:not(.active){background:var(--primary-light);color:var(--primary-dark);}
-.farma-nav-group{margin:2px 0;}
-.farma-nav-group-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:10px 12px;background:transparent!important;color:var(--text)!important;border:0!important;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;text-align:right;box-shadow:none!important;}
-.farma-nav-group-toggle:hover{background:var(--primary-light)!important;color:var(--primary-dark)!important;}
-.farma-nav-group-toggle .farma-nav-group-title{display:flex;align-items:center;gap:10px;min-width:0;}
-.farma-nav-chevron{font-size:11px;transition:transform .18s ease;color:var(--text-muted);}
-.farma-nav-group.open .farma-nav-chevron{transform:rotate(90deg);}
-.farma-nav-sub{display:grid;grid-template-rows:0fr;transition:grid-template-rows .2s ease;overflow:hidden;}
-.farma-nav-group.open .farma-nav-sub{grid-template-rows:1fr;}
-.farma-nav-sub-inner{min-height:0;display:flex;flex-direction:column;padding-right:18px;}
-.farma-nav-sub a{font-size:12.5px!important;padding:9px 12px!important;margin:1px 4px!important;position:relative;}
-.farma-nav-sub a::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;opacity:.45;flex:none;}
-.farma-nav-home{margin-bottom:4px!important;}
-.farma-sidebar-brand{display:flex;align-items:center;gap:10px;padding:14px 12px 12px;margin-bottom:2px;border-bottom:1px solid var(--border);}
-.farma-sidebar-brand-logo{width:34px;height:34px;border-radius:9px;background:var(--primary);color:#fff;display:grid;place-items:center;font-weight:800;font-size:15px;flex:none;}
-.farma-sidebar-brand-text{font-size:14px;font-weight:800;color:var(--text);white-space:nowrap;overflow:hidden;}
-.farma-sidebar-brand-text small{display:block;font-size:10px;color:var(--text-muted);font-weight:600;margin-top:2px;}
-.farma-nav-collapse{position:absolute;left:10px;top:10px;width:30px;height:30px!important;padding:0!important;border-radius:8px!important;background:var(--bg)!important;color:var(--text-muted)!important;border:1px solid var(--border)!important;display:grid!important;place-items:center;font-size:14px!important;box-shadow:none!important;}
-.farma-sidebar-collapsed nav{width:76px!important;}
-.farma-sidebar-collapsed .farma-sidebar-brand{justify-content:center;padding-left:6px;padding-right:6px;}
-.farma-sidebar-collapsed .farma-sidebar-brand-text,.farma-sidebar-collapsed .farma-nav-group-title span:last-child,.farma-sidebar-collapsed .farma-nav-chevron,.farma-sidebar-collapsed nav::before,.farma-sidebar-collapsed .farma-nav-sub{display:none!important;}
-.farma-sidebar-collapsed .farma-nav-collapse{left:23px;top:52px;}
-.farma-sidebar-collapsed nav a,.farma-sidebar-collapsed .farma-nav-group-toggle{justify-content:center;padding:11px 8px!important;margin-left:4px!important;margin-right:4px!important;}
-.farma-sidebar-collapsed nav a::before{display:none;}
-.farma-sidebar-collapsed .farma-nav-group{margin-top:6px;}
-.farma-sidebar-collapsed .farma-nav-group-title{justify-content:center;}
-@media (min-width:900px){
- body.farma-sidebar-ready{max-width:none!important;margin:0!important;padding:14px 14px 60px 14px!important;display:block!important;}
- body.farma-sidebar-ready>.main-content{margin-right:294px;min-width:0;transition:margin-right .2s ease;}
- body.farma-sidebar-collapsed>.main-content{margin-right:96px;}
- body.farma-sidebar-ready>header{margin-right:294px;transition:margin-right .2s ease;}
- body.farma-sidebar-collapsed>header{margin-right:96px;}
- body.farma-sidebar-ready nav{position:fixed!important;right:14px!important;top:14px!important;width:270px!important;height:calc(100vh - 28px)!important;z-index:999!important;transform:none!important;border-radius:var(--radius)!important;box-shadow:var(--shadow)!important;overflow-y:auto!important;transition:width .2s ease,box-shadow .2s ease;}
+
+:root {
+  --farma-sidebar-width: 270px;
+  --farma-sidebar-collapsed: 78px;
 }
-@media (max-width:899px){
- body.farma-sidebar-ready nav{width:82%;max-width:300px;}
- body.farma-sidebar-ready .farma-nav-collapse{display:none!important;}
- body.farma-sidebar-ready nav{padding-top:8px!important;}
+
+body.farma-sidebar-ready {
+  padding: 16px;
+  padding-right: calc(var(--farma-sidebar-width) + 32px);
+  max-width: none;
+  margin: 0;
+}
+
+body.farma-sidebar-ready > nav {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  bottom: 12px;
+  width: var(--farma-sidebar-width);
+  height: auto;
+  margin: 0;
+  padding: 12px 10px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 8px 30px rgba(16,24,40,.08);
+  transform: none;
+  transition: width .22s ease, right .22s ease;
+}
+
+body.farma-sidebar-ready > nav::before { display: none; }
+
+.farma-sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 5px 8px 12px;
+  margin-bottom: 5px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.farma-sidebar-brand-logo {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 20px;
+  font-weight: 800;
+}
+
+.farma-sidebar-brand-text {
+  display: flex;
+  flex-direction: column;
+  font-size: 17px;
+  font-weight: 800;
+  color: var(--text);
+  line-height: 1.15;
+}
+
+.farma-sidebar-brand-text small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.farma-nav-collapse {
+  position: absolute;
+  top: 17px;
+  left: 10px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.farma-nav-collapse:hover { background: var(--primary-light); color: var(--primary-dark); }
+
+.farma-nav-group { margin: 2px 0; }
+
+.farma-nav-group-toggle {
+  width: 100%;
+  min-height: 43px;
+  padding: 9px 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  background: transparent;
+  color: var(--text);
+  border: 0;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: right;
+}
+
+.farma-nav-group-toggle:hover { background: var(--bg); color: var(--text); }
+
+.farma-nav-group-title { display: flex; align-items: center; gap: 9px; }
+.farma-nav-group-title > span:first-child { width: 21px; text-align: center; font-size: 16px; }
+
+.farma-nav-chevron {
+  color: var(--text-muted);
+  font-size: 20px;
+  transition: transform .18s ease;
+}
+
+.farma-nav-group.open .farma-nav-chevron { transform: rotate(90deg); }
+
+.farma-nav-sub {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows .2s ease;
+  overflow: hidden;
+}
+
+.farma-nav-group.open .farma-nav-sub { grid-template-rows: 1fr; }
+.farma-nav-sub-inner { min-height: 0; overflow: hidden; padding-right: 8px; }
+
+body.farma-sidebar-ready nav a {
+  margin: 2px 0;
+  padding: 9px 11px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--text-muted);
+  text-decoration: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background .15s ease, color .15s ease;
+}
+
+body.farma-sidebar-ready nav a > span:first-child { width: 21px; flex: 0 0 21px; text-align: center; font-size: 15px; }
+body.farma-sidebar-ready nav a:hover { background: var(--primary-light); color: var(--primary-dark); }
+body.farma-sidebar-ready nav a.active { background: var(--primary); color: #fff; font-weight: 750; }
+
+/* Collapsed desktop rail */
+body.farma-sidebar-collapsed { padding-right: calc(var(--farma-sidebar-collapsed) + 28px); }
+body.farma-sidebar-collapsed > nav { width: var(--farma-sidebar-collapsed); }
+body.farma-sidebar-collapsed .farma-sidebar-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+body.farma-sidebar-collapsed .farma-sidebar-brand-text,
+body.farma-sidebar-collapsed .farma-nav-group-title > span:last-child,
+body.farma-sidebar-collapsed .farma-nav-chevron,
+body.farma-sidebar-collapsed .farma-nav-sub,
+body.farma-sidebar-collapsed nav > a > span:last-child { display: none; }
+body.farma-sidebar-collapsed .farma-sidebar-brand-logo { width: 38px; }
+body.farma-sidebar-collapsed .farma-nav-collapse { left: 50%; transform: translateX(-50%); top: 58px; }
+body.farma-sidebar-collapsed .farma-nav-group-toggle { justify-content: center; padding: 9px; }
+body.farma-sidebar-collapsed nav > a { justify-content: center; padding: 9px; }
+body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child { width: auto; font-size: 17px; }
+
+@media (max-width: 899px) {
+  body.farma-sidebar-ready,
+  body.farma-sidebar-collapsed {
+    padding: 10px;
+    max-width: 720px;
+    margin: 0 auto;
+  }
+
+  body.farma-sidebar-ready > nav {
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(86vw, 310px);
+    border-radius: 0;
+    border-top: 0;
+    border-bottom: 0;
+    border-right: 0;
+    box-shadow: -12px 0 35px rgba(16,24,40,.18);
+    transform: translateX(105%);
+    transition: transform .22s ease;
+  }
+
+  body.farma-sidebar-ready > nav.open { transform: translateX(0); }
+  body.farma-sidebar-collapsed > nav { width: min(86vw, 310px); }
+  body.farma-sidebar-collapsed > nav .farma-sidebar-brand-text,
+  body.farma-sidebar-collapsed > nav .farma-nav-group-title > span:last-child,
+  body.farma-sidebar-collapsed > nav .farma-nav-chevron,
+  body.farma-sidebar-collapsed > nav .farma-nav-sub,
+  body.farma-sidebar-collapsed > nav > a > span:last-child { display: initial; }
+  body.farma-sidebar-collapsed > nav .farma-sidebar-brand { justify-content: flex-start; }
+  body.farma-sidebar-collapsed > nav .farma-nav-collapse { left: 10px; transform: none; top: 17px; }
+
+  body.farma-sidebar-ready header { margin-bottom: 10px; }
+  body.farma-sidebar-ready #menuToggle { display: inline-grid; place-items: center; min-width: 42px; min-height: 40px; }
+}
+
+@media (min-width: 900px) {
+  body.farma-sidebar-ready > .main-content { width: 100%; min-width: 0; }
+  body.farma-sidebar-ready header { width: 100%; }
 }
