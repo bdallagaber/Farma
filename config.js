@@ -2,7 +2,7 @@
 // إعدادات الاتصال بـ Supabase - ملف مشترك تستخدمه كل صفحات السيستم
 // ============================================================
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-sb_publishable_XDFuq8hI4IEBRo-sU5WW0";
+const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-sU5WW0";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -23,7 +23,6 @@ async function getStableSession() {
     try {
       const { data, error } = await sb.auth.getSession();
       if (!error && data?.session) return data.session;
-
       if (attempt < 2) await sleep(500 * (attempt + 1));
     } catch (err) {
       console.warn('Session lookup attempt failed:', err);
@@ -73,7 +72,6 @@ async function requireAuth() {
   const profile = await getStableProfile(session.user.id);
 
   // لا نعملش redirect بسبب مشكلة شبكة/استعلام مؤقت.
-  // لو الـ session نفسها موجودة، ندي فرصة للصفحة تكمل بدل ما يظهر للمستخدم إنه اتعمله logout.
   if (!profile) {
     console.warn('Profile temporarily unavailable; keeping active session.');
     return {
@@ -89,7 +87,7 @@ async function requireAuth() {
   return { user: session.user, profile };
 }
 
-// راقب تغييرات المصادقة، لكن لا نطرد المستخدم بسبب INITIAL_SESSION أو أخطاء مؤقتة.
+// لا نعملش redirect إلا عند SIGNED_OUT الحقيقي، وليس عند بداية تحميل الجلسة.
 sb.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT' && !session) {
     const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
@@ -275,10 +273,6 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
 // ============================================================
 // إصلاح فلترة المبيعات حسب تاريخ القاهرة
 // ============================================================
-// Supabase يخزن created_at كـ timestamptz. فلتر "اليوم" كان يعتمد
-// على timezone الجهاز، فلو الجهاز على UTC كانت مبيعات 00:00–02:59
-// بتوقيت القاهرة تظهر ضمن اليوم السابق/لا تظهر في "اليوم".
-// هذا override يجعل بداية اليوم/الأسبوع/الشهر محسوبة بتوقيت القاهرة.
 (function installCairoSalesDateFix() {
   const isSalesPage = /(^|\/)sales\.html$/i.test(window.location.pathname);
   if (!isSalesPage) return;
@@ -302,7 +296,6 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   };
 
   const cairoStartIso = (year, month, day) => {
-    // Egypt is UTC+03:00 during the current summer period.
     return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
   };
 
@@ -323,21 +316,16 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
       if (range === 'today') {
         return cairoStartIso(cairoToday.year, cairoToday.month, cairoToday.day);
       }
-
       if (range === 'week') {
         const start = shiftCairoDate(cairoToday.year, cairoToday.month, cairoToday.day, -7);
         return cairoStartIso(start.year, start.month, start.day);
       }
-
       if (range === 'month') {
         const start = new Date(Date.UTC(cairoToday.year, cairoToday.month - 1, cairoToday.day));
         start.setUTCMonth(start.getUTCMonth() - 1);
         return cairoStartIso(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate());
       }
-
-      return typeof originalGetRangeStart === 'function'
-        ? originalGetRangeStart(range)
-        : null;
+      return typeof originalGetRangeStart === 'function' ? originalGetRangeStart(range) : null;
     };
 
     if (typeof window.loadRecentSales === 'function') {
