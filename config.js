@@ -20,6 +20,14 @@ async function sleep(ms) {
 
 let farmaRedirectingToLogin = false;
 let farmaLastKnownSession = null;
+let farmaLastKnownProfile = null;
+
+try {
+  const cachedProfile = localStorage.getItem('farma-profile-cache');
+  if (cachedProfile) farmaLastKnownProfile = JSON.parse(cachedProfile);
+} catch (err) {
+  console.warn('Could not restore cached profile:', err);
+}
 
 async function getStableSession() {
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -69,7 +77,15 @@ async function getStableProfile(userId) {
         .eq('id', userId)
         .single();
 
-      if (!error && data) return data;
+      if (!error && data) {
+        farmaLastKnownProfile = data;
+        try {
+          localStorage.setItem('farma-profile-cache', JSON.stringify(data));
+        } catch (cacheErr) {
+          console.warn('Could not cache profile:', cacheErr);
+        }
+        return data;
+      }
       console.warn('Profile lookup attempt failed:', error);
     } catch (err) {
       console.warn('Profile lookup exception:', err);
@@ -89,6 +105,7 @@ async function requireAuth() {
     const recoveredSession = await getStableSession();
     if (recoveredSession) return requireAuthWithSession(recoveredSession);
 
+    // Only redirect after all recovery attempts fail. Never sign out here.
     if (!farmaRedirectingToLogin) {
       farmaRedirectingToLogin = true;
       window.location.replace('index.html');
@@ -102,23 +119,28 @@ async function requireAuth() {
 async function requireAuthWithSession(session) {
   const profile = await getStableProfile(session.user.id);
 
-  if (!profile) {
-    console.warn('Profile temporarily unavailable; keeping active Supabase session.');
-    return {
-      user: session.user,
-      profile: {
-        role: 'admin',
-        full_name: session.user.email || 'مستخدم',
-        allowed_pages: []
-      }
-    };
+  if (profile) return { user: session.user, profile };
+
+  // A temporary database/network outage must not destroy the user's access.
+  // Reuse the last verified permissions for this browser session if available.
+  if (farmaLastKnownProfile) {
+    console.warn('Profile temporarily unavailable; using last verified profile.');
+    return { user: session.user, profile: farmaLastKnownProfile };
   }
 
-  return { user: session.user, profile };
+  // No cached permissions exist yet. Keep the authenticated session alive,
+  // but do not grant admin privileges as a fallback.
+  return {
+    user: session.user,
+    profile: {
+      role: 'employee',
+      full_name: session.user.email || 'مستخدم',
+      allowed_pages: []
+    }
+  };
 }
 
 // لا نعملش redirect من onAuthStateChange.
-// أحداث Supabase أثناء استعادة/تجديد الجلسة ليست تسجيل خروج حقيقيًا بالضرورة.
 sb.auth.onAuthStateChange((event, session) => {
   if (session) farmaLastKnownSession = session;
   console.debug('Farma auth event:', event, session ? 'session-present' : 'no-session');
