@@ -1,0 +1,25 @@
+/* Login page must remain mathematically centered in the viewport. */
+html, body.login-page {
+  width: 100%;
+  min-width: 100%;
+}
+
+body.login-page {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 20px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+body.login-page > .card {
+  width: min(380px, calc(100vw - 40px)) !important;
+  max-width: 380px !important;
+  margin: 0 auto !important;
+  flex: 0 0 auto;
+}
