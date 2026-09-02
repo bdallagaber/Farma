@@ -7,17 +7,15 @@ const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
-    autoRefreshToken: false,
+    autoRefreshToken: true,
     detectSessionInUrl: false,
     storage: window.localStorage,
     storageKey: 'farma-auth'
   }
 });
 
-// امنع ظهور الـ layout القديم ولو لجزء من الثانية أثناء تجهيز الـ sidebar.
-// يتم إظهار الصفحة فور انتهاء setupFarmaSidebar.
+// امنع ظهور الـ layout القديم أثناء تجهيز الـ sidebar.
 (function installSidebarPreloadGuard() {
-  if (!document.body || !document.body.classList.contains('has-sidebar')) return;
   if (document.getElementById('farmaSidebarPreloadGuard')) return;
   const style = document.createElement('style');
   style.id = 'farmaSidebarPreloadGuard';
@@ -32,7 +30,6 @@ async function sleep(ms) {
 let farmaRedirectingToLogin = false;
 let farmaLastKnownSession = null;
 let farmaLastKnownProfile = null;
-let farmaRefreshPromise = null;
 
 try {
   const cachedProfile = localStorage.getItem('farma-profile-cache');
@@ -53,35 +50,6 @@ async function getStableSession() {
     console.warn('Session lookup exception:', err);
   }
   return null;
-}
-
-async function refreshSessionIfNeeded(session) {
-  if (!session) return null;
-  const expiresAt = Number(session.expires_at || 0);
-  const now = Math.floor(Date.now() / 1000);
-  const needsRefresh = !expiresAt || expiresAt - now <= 120;
-  if (!needsRefresh) return session;
-
-  if (farmaRefreshPromise) return farmaRefreshPromise;
-
-  farmaRefreshPromise = (async () => {
-    try {
-      const { data, error } = await sb.auth.refreshSession();
-      if (!error && data?.session) {
-        farmaLastKnownSession = data.session;
-        return data.session;
-      }
-      console.warn('Session refresh failed:', error);
-      return session;
-    } catch (err) {
-      console.warn('Session refresh exception:', err);
-      return session;
-    } finally {
-      farmaRefreshPromise = null;
-    }
-  })();
-
-  return farmaRefreshPromise;
 }
 
 async function getStableProfile(userId) {
@@ -116,8 +84,6 @@ async function requireAuth() {
   let session = await getStableSession();
 
   if (!session) {
-    // أثناء navigation السريع قد تكون الصفحة الجديدة بدأت قبل اكتمال
-    // كتابة الـ session في localStorage. ننتظر قليلًا ثم نقرأ فقط.
     await sleep(500);
     session = await getStableSession();
   }
@@ -130,7 +96,9 @@ async function requireAuth() {
     return null;
   }
 
-  session = await refreshSessionIfNeeded(session);
+  // لا نستدعي refreshSession() يدويًا هنا.
+  // Supabase autoRefreshToken يتولى التجديد في الخلفية، وتجنّب refresh
+  // في كل صفحة يمنع سباق refresh-token عند التنقل السريع بين الصفحات.
   return requireAuthWithSession(session);
 }
 
@@ -203,7 +171,6 @@ function setupFarmaSidebar() {
   }
 
   sidebar.dataset.farmaBuilt = '1';
-  document.body.classList.add('farma-sidebar-ready');
 
   const currentFile = (location.pathname.split('/').pop() || 'inventory.html').toLowerCase();
   const byHref = {};
@@ -314,6 +281,9 @@ function setupFarmaSidebar() {
     overlay.addEventListener('click', closeMobile);
     sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
   }
+
+  // مهم جدًا: لا نظهر الصفحة قبل اكتمال بناء الـ sidebar بالكامل.
+  document.body.classList.add('farma-sidebar-ready');
 }
 
 document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
