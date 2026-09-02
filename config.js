@@ -52,20 +52,20 @@ async function getStableSession() {
   return null;
 }
 
-// أثناء التنقل السريع بين الصفحات قد تحتاج صفحة جديدة لحظات حتى تقرأ
-// الـ session المستمرة من التخزين. لا نعيد توجيه المستخدم فورًا إلى Login.
+// عند فتح صفحة جديدة، سيشن Supabase قد تحتاج لحظات حتى تُقرأ من التخزين.
+// ننتظر عدة مرات بدل ما نعتبر المستخدم Logged out بسبب تأخير لحظي.
 async function waitForStableSession() {
-  const attempts = 6;
+  const attempts = 10;
   for (let attempt = 0; attempt < attempts; attempt++) {
     const session = await getStableSession();
     if (session) return session;
-    if (attempt < attempts - 1) await sleep(250);
+    if (attempt < attempts - 1) await sleep(300);
   }
   return null;
 }
 
 async function getStableProfile(userId) {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const { data, error } = await sb
         .from('profiles')
@@ -87,18 +87,17 @@ async function getStableProfile(userId) {
       console.warn('Profile lookup exception:', err);
     }
 
-    if (attempt < 2) await sleep(350 * (attempt + 1));
+    if (attempt < 4) await sleep(400 * (attempt + 1));
   }
   return null;
 }
 
 async function requireAuth() {
-  // لا نعمل refreshSession() يدويًا هنا؛ Supabase autoRefreshToken
-  // مسؤول عن التجديد. إعادة الـ refresh عند كل صفحة كانت تسبب race
-  // و429/token_revoked عند التنقل السريع.
   const session = await waitForStableSession();
 
   if (!session) {
+    // لا نعمل refreshSession() يدويًا هنا؛ ده كان سبب race و token_revoked.
+    // إعادة التوجيه تحصل فقط بعد انتهاء كل محاولات قراءة الـ session.
     if (!farmaRedirectingToLogin) {
       farmaRedirectingToLogin = true;
       window.location.replace('index.html');
@@ -120,7 +119,7 @@ async function requireAuthWithSession(session) {
     return { user: session.user, profile: farmaLastKnownProfile };
   }
 
-  // لا نعمل signOut ولا نعتبر المستخدم logged out بسبب فشل استعلام profiles.
+  // لا نعمل signOut بسبب فشل استعلام profiles.
   return {
     user: session.user,
     profile: {
@@ -294,7 +293,6 @@ function setupFarmaSidebar() {
     sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
   }
 
-  // مهم جدًا: لا نظهر الصفحة قبل اكتمال بناء الـ sidebar بالكامل.
   document.body.classList.add('farma-sidebar-ready');
 }
 
@@ -308,6 +306,17 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   const script = document.createElement('script');
   script.id = 'farmaInventoryEnhancements';
   script.src = 'inventory-enhancements.js?v=1';
+  document.head.appendChild(script);
+})();
+
+(function loadInventoryRecovery() {
+  const isInventoryPage = /(^|\/)inventory\.html$/i.test(window.location.pathname);
+  if (!isInventoryPage) return;
+  if (document.getElementById('farmaInventoryRecovery')) return;
+
+  const script = document.createElement('script');
+  script.id = 'farmaInventoryRecovery';
+  script.src = 'inventory-recovery.js?v=1';
   document.head.appendChild(script);
 })();
 
