@@ -4,9 +4,8 @@
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
 
-// مهم: صفحة واحدة فقط هي التي تدير الـ session أثناء التنقل.
-// لا نستخدم autoRefreshToken هنا لأن كل صفحة HTML تنشئ Supabase client جديد،
-// ووجود أكثر من client يحاول refresh نفس refresh-token ممكن يعمل token_revoked.
+// كل صفحة HTML تنشئ client جديد. لذلك نوقف auto-refresh ونقوم بعمل
+// refresh مضبوط من الصفحة الحالية فقط، لتجنب أن صفحتين تتسابقان على نفس refresh-token.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
@@ -25,14 +24,13 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   document.head.appendChild(style);
 })();
 
-async function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+async function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 let farmaRedirectingToLogin = false;
 let farmaLastKnownSession = null;
 let farmaLastKnownProfile = null;
 let farmaAuthInitialized = false;
+let farmaRefreshInFlight = null;
 
 try {
   const cachedProfile = localStorage.getItem('farma-profile-cache');
@@ -55,45 +53,72 @@ async function getStableSession() {
   return null;
 }
 
-// Refresh فقط عندما تكون الجلسة قريبة من الانتهاء.
-// لا يتم refresh عند كل انتقال بين صفحات النظام.
-async function refreshIfNeeded(session) {
+async function refreshSessionSafely(session) {
   if (!session) return null;
+  if (farmaRefreshInFlight) return farmaRefreshInFlight;
 
   const expiresAt = Number(session.expires_at || 0) * 1000;
   const remaining = expiresAt ? expiresAt - Date.now() : 0;
-
-  // لو الجلسة لسه صالحة لأكثر من 10 دقائق، ممنوع نلمس الـ refresh token.
   if (remaining > 10 * 60 * 1000) return session;
 
+  // Cross-page lock: يمنع الصفحة القديمة والجديدة من refresh نفس token في نفس اللحظة.
+  const lockKey = 'farma-auth-refresh-lock';
+  const now = Date.now();
   try {
-    const { data, error } = await sb.auth.refreshSession({
-      refresh_token: session.refresh_token
-    });
-
-    if (!error && data?.session) {
-      farmaLastKnownSession = data.session;
-      return data.session;
+    const existing = Number(localStorage.getItem(lockKey) || 0);
+    if (existing && now - existing < 15000) {
+      await sleep(1200);
+      const recovered = await getStableSession();
+      return recovered || (expiresAt > Date.now() ? session : null);
     }
+    localStorage.setItem(lockKey, String(now));
+  } catch (_) {}
 
-    console.warn('Session refresh failed:', error);
-  } catch (err) {
-    console.warn('Session refresh exception:', err);
-  }
+  farmaRefreshInFlight = (async () => {
+    try {
+      const { data, error } = await sb.auth.refreshSession({ refresh_token: session.refresh_token });
+      if (!error && data?.session) {
+        farmaLastKnownSession = data.session;
+        return data.session;
+      }
+      console.warn('Session refresh failed:', error);
+      return expiresAt > Date.now() ? session : null;
+    } catch (err) {
+      console.warn('Session refresh exception:', err);
+      return expiresAt > Date.now() ? session : null;
+    } finally {
+      try { localStorage.removeItem(lockKey); } catch (_) {}
+      farmaRefreshInFlight = null;
+    }
+  })();
 
-  // لو الـ access token لسه صالح، نكمل به بدل logout.
-  if (expiresAt > Date.now()) return session;
-  return null;
+  return farmaRefreshInFlight;
 }
 
 async function waitForStableSession() {
-  // قراءة واحدة + retry قصير؛ لا توجد سلسلة refresh calls.
   for (let attempt = 0; attempt < 4; attempt++) {
     const session = await getStableSession();
-    if (session) return refreshIfNeeded(session);
+    if (session) return refreshSessionSafely(session);
     if (attempt < 3) await sleep(350);
   }
   return null;
+}
+
+// Keep the current page authenticated for long-running pharmacy sessions.
+// This runs only on the currently open page and refreshes only when needed.
+function startFarmaSessionKeepAlive() {
+  if (window.__farmaKeepAliveStarted) return;
+  window.__farmaKeepAliveStarted = true;
+
+  const tick = async () => {
+    const session = await getStableSession();
+    if (session) await refreshSessionSafely(session);
+  };
+
+  window.__farmaKeepAliveTimer = setInterval(tick, 5 * 60 * 1000);
+  window.addEventListener('beforeunload', () => {
+    clearInterval(window.__farmaKeepAliveTimer);
+  }, { once: true });
 }
 
 async function getStableProfile(userId) {
@@ -107,18 +132,13 @@ async function getStableProfile(userId) {
 
       if (!error && data) {
         farmaLastKnownProfile = data;
-        try {
-          localStorage.setItem('farma-profile-cache', JSON.stringify(data));
-        } catch (cacheErr) {
-          console.warn('Could not cache profile:', cacheErr);
-        }
+        try { localStorage.setItem('farma-profile-cache', JSON.stringify(data)); } catch (_) {}
         return data;
       }
       console.warn('Profile lookup attempt failed:', error);
     } catch (err) {
       console.warn('Profile lookup exception:', err);
     }
-
     if (attempt < 3) await sleep(400 * (attempt + 1));
   }
   return null;
@@ -127,14 +147,17 @@ async function getStableProfile(userId) {
 async function requireAuth() {
   if (farmaAuthInitialized) {
     const session = await getStableSession();
-    return session ? requireAuthWithSession(session) : null;
+    if (session) {
+      startFarmaSessionKeepAlive();
+      return requireAuthWithSession(session);
+    }
+    return null;
   }
 
   farmaAuthInitialized = true;
   const session = await waitForStableSession();
 
   if (!session) {
-    // لا نعمل redirect إلا لو لا يوجد session فعلًا بعد كل المحاولات.
     if (!farmaRedirectingToLogin) {
       farmaRedirectingToLogin = true;
       window.location.replace('index.html');
@@ -142,12 +165,12 @@ async function requireAuth() {
     return null;
   }
 
+  startFarmaSessionKeepAlive();
   return requireAuthWithSession(session);
 }
 
 async function requireAuthWithSession(session) {
   const profile = await getStableProfile(session.user.id);
-
   if (profile) return { user: session.user, profile };
 
   if (farmaLastKnownProfile) {
@@ -155,7 +178,6 @@ async function requireAuthWithSession(session) {
     return { user: session.user, profile: farmaLastKnownProfile };
   }
 
-  // فشل profiles ليس Logout.
   return {
     user: session.user,
     profile: {
@@ -173,7 +195,6 @@ sb.auth.onAuthStateChange((event, session) => {
 
 function guardPageAccess(profile, pageKey) {
   if (profile.role === 'admin') return true;
-
   const allowed = profile.allowed_pages || [];
 
   document.querySelectorAll('nav a[href$=".html"]').forEach(a => {
@@ -183,10 +204,8 @@ function guardPageAccess(profile, pageKey) {
   });
 
   if (!allowed.includes(pageKey)) {
-    document.body.innerHTML =
-      '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#6b7684;">' +
-      'مفيش صلاحية لدخول القسم ده. <a href="' + (allowed[0] || 'index') + '.html" style="color:#0d9488;">ارجع للصفحة المسموحة</a>' +
-      '</div>';
+    document.body.innerHTML = '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#6b7684;">' +
+      'مفيش صلاحية لدخول القسم ده. <a href="' + (allowed[0] || 'index') + '.html" style="color:#0d9488;">ارجع للصفحة المسموحة</a></div>';
     return false;
   }
   return true;
@@ -240,14 +259,12 @@ function setupFarmaSidebar() {
   function addGroup(group) {
     const existing = group.hrefs.map(h => byHref[h]).filter(Boolean);
     if (!existing.length) return;
-
     const wrapper = document.createElement('div');
     wrapper.className = 'farma-nav-group';
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'farma-nav-group-toggle';
     toggle.innerHTML = '<span class="farma-nav-group-title"><span>' + group.icon + '</span><span>' + group.title + '</span></span><span class="farma-nav-chevron">›</span>';
-
     const sub = document.createElement('div');
     sub.className = 'farma-nav-sub';
     const inner = document.createElement('div');
