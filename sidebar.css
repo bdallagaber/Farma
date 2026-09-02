@@ -7,7 +7,6 @@
   --farma-sidebar-collapsed: 78px;
 }
 
-/* ---------------- Desktop layout ---------------- */
 body.farma-sidebar-ready {
   padding: 16px;
   padding-right: calc(var(--farma-sidebar-width) + 32px);
@@ -47,7 +46,6 @@ body.farma-sidebar-ready > nav::-webkit-scrollbar-thumb {
 
 body.farma-sidebar-ready > nav::before { display: none; }
 
-/* ---------------- Brand ---------------- */
 .farma-sidebar-brand {
   display: flex;
   align-items: center;
@@ -88,7 +86,6 @@ body.farma-sidebar-ready > nav::before { display: none; }
   font-weight: 600;
 }
 
-/* ---------------- Collapse button ---------------- */
 .farma-nav-collapse {
   position: absolute;
   top: 17px;
@@ -111,8 +108,13 @@ body.farma-sidebar-ready > nav::before { display: none; }
   color: var(--primary-dark);
 }
 
-/* ---------------- Groups ---------------- */
-.farma-nav-group { margin: 2px 0; }
+.farma-nav-group {
+  margin: 2px 0 7px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+.farma-nav-group:last-of-type { border-bottom: 0; }
 
 .farma-nav-group-toggle {
   width: 100%;
@@ -178,8 +180,8 @@ body.farma-sidebar-ready nav a:focus-visible {
   padding-right: 8px;
 }
 
-/* ---------------- Links ---------------- */
 body.farma-sidebar-ready nav a {
+  position: relative;
   margin: 2px 0;
   padding: 9px 11px;
   min-height: 40px;
@@ -192,7 +194,7 @@ body.farma-sidebar-ready nav a {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background .15s ease, color .15s ease, transform .1s ease;
+  transition: background .15s ease, color .15s ease, transform .1s ease, box-shadow .15s ease;
 }
 
 body.farma-sidebar-ready nav a > span:first-child {
@@ -213,9 +215,20 @@ body.farma-sidebar-ready nav a.active {
   background: var(--primary);
   color: #fff;
   font-weight: 750;
+  box-shadow: 0 4px 12px rgba(0,0,0,.08);
 }
 
-/* ---------------- Collapsed desktop rail ---------------- */
+body.farma-sidebar-ready nav a.active::before {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+  background: #fff;
+}
+
 body.farma-sidebar-collapsed {
   padding-right: calc(var(--farma-sidebar-collapsed) + 28px);
 }
@@ -259,7 +272,12 @@ body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child {
   font-size: 17px;
 }
 
-/* ---------------- Mobile drawer ---------------- */
+body.farma-sidebar-collapsed nav a.active::before {
+  right: 3px;
+  top: 7px;
+  bottom: 7px;
+}
+
 @media (max-width: 899px) {
   body.farma-sidebar-ready,
   body.farma-sidebar-collapsed {
@@ -288,7 +306,6 @@ body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child {
     transform: translateX(0);
   }
 
-  /* Collapsed state is a desktop-only concept. */
   body.farma-sidebar-collapsed {
     padding-right: 10px;
   }
@@ -334,6 +351,11 @@ body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child {
 
   .farma-nav-group-toggle { min-height: 46px; }
   body.farma-sidebar-ready nav a { min-height: 42px; }
+
+  body.farma-sidebar-ready nav a.active::before {
+    top: 7px;
+    bottom: 7px;
+  }
 }
 
 @media (min-width: 900px) {
