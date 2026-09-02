@@ -8,19 +8,17 @@
 <script src="zxing-lib.js"></script>
 <script src="xlsx-lib.js"></script>
 <link rel="stylesheet" href="style.css">
+
 <style>
-/* تحسين سلة المبيعات على شاشات الموبايل */
+/* تحسين سلة المبيعات على الموبايل */
 #cartWrap {
   width: 100%;
   max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 #cartWrap table {
   width: 100%;
   max-width: 100%;
-  table-layout: fixed;
 }
 
 #cartWrap th,
@@ -28,113 +26,118 @@
   vertical-align: middle;
 }
 
-#cartWrap th:first-child,
-#cartWrap td:first-child {
-  width: 34%;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-#cartWrap th:nth-child(2),
-#cartWrap td:nth-child(2) {
-  width: 38%;
-}
-
-#cartWrap th:nth-child(3),
-#cartWrap td:nth-child(3) {
-  width: 78px;
-}
-
-#cartWrap th:last-child,
-#cartWrap td:last-child {
-  width: 54px;
-  min-width: 54px;
-  max-width: 54px;
-  padding-left: 3px;
-  padding-right: 3px;
-  text-align: center;
-}
-
 #cartWrap td:last-child button {
   display: inline-block !important;
   visibility: visible !important;
   opacity: 1 !important;
-  width: 48px !important;
-  min-width: 48px !important;
-  max-width: 48px !important;
-  padding: 7px 3px !important;
-  margin: 0 !important;
-  white-space: nowrap;
-  font-size: 11px;
-}
-
-#cartWrap td:nth-child(2) > div {
-  display: flex !important;
-  align-items: center;
-  gap: 4px !important;
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-
-#cartWrap td:nth-child(2) input[type="number"] {
-  width: 48px !important;
-  min-width: 48px;
-  max-width: 48px;
-  padding: 5px !important;
-  font-size: 12px !important;
-}
-
-#cartWrap td:nth-child(2) select {
-  width: auto !important;
-  min-width: 70px;
-  max-width: 100%;
-  padding: 5px !important;
-  font-size: 12px !important;
-}
-
-#cartWrap td:nth-child(3) input[type="number"] {
-  width: 64px !important;
-  min-width: 64px;
-  max-width: 100%;
-  padding: 5px !important;
-  font-size: 12px !important;
 }
 
 @media (max-width: 600px) {
   #cartWrap {
-    overflow-x: hidden;
+    width: 100%;
+    overflow: visible !important;
   }
 
   #cartWrap table {
-    font-size: 12px;
+    width: 100% !important;
+    table-layout: fixed !important;
+    border-collapse: collapse;
   }
 
-  #cartWrap th,
+  #cartWrap thead {
+    display: none;
+  }
+
+  #cartWrap tbody,
+  #cartWrap tr {
+    display: block;
+    width: 100%;
+  }
+
+  #cartWrap tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 108px 68px 52px;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    border-bottom: 1px solid #ddd;
+  }
+
   #cartWrap td {
-    padding: 6px 3px;
+    display: block;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    box-sizing: border-box;
+    padding: 6px 3px !important;
+    overflow: visible !important;
   }
 
-  #cartWrap th:first-child,
   #cartWrap td:first-child {
-    width: 30%;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
-  #cartWrap th:nth-child(2),
-  #cartWrap td:nth-child(2) {
-    width: 37%;
+  #cartWrap td:nth-child(2) > div {
+    display: flex !important;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 3px !important;
+    flex-wrap: nowrap !important;
+    width: 100%;
+    max-width: 100%;
   }
 
-  #cartWrap th:nth-child(3),
-  #cartWrap td:nth-child(3) {
-    width: 70px;
+  #cartWrap td:nth-child(2) input[type="number"] {
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    padding: 5px 2px !important;
+    font-size: 12px !important;
+    box-sizing: border-box;
   }
 
-  #cartWrap th:last-child,
-  #cartWrap td:last-child {
-    width: 52px;
-    min-width: 52px;
-    max-width: 52px;
-    padding: 5px 2px;
+  #cartWrap td:nth-child(2) select {
+    width: 60px !important;
+    min-width: 60px !important;
+    max-width: 60px !important;
+    padding: 5px 2px !important;
+    font-size: 11px !important;
+    box-sizing: border-box;
+  }
+
+  #cartWrap td:nth-child(3) input[type="number"] {
+    width: 58px !important;
+    min-width: 58px !important;
+    max-width: 58px !important;
+    padding: 5px 2px !important;
+    font-size: 12px !important;
+    box-sizing: border-box;
+  }
+
+  #cartWrap td:nth-child(4) {
+    width: 52px !important;
+    min-width: 52px !important;
+    max-width: 52px !important;
+    text-align: center;
+    overflow: visible !important;
+  }
+
+  #cartWrap td:nth-child(4) button,
+  #cartWrap td:last-child button {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    height: 34px !important;
+    padding: 6px 2px !important;
+    margin: 0 auto !important;
+    font-size: 11px !important;
+    line-height: 20px !important;
+    white-space: nowrap !important;
+    box-sizing: border-box;
   }
 }
 </style>
