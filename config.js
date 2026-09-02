@@ -52,6 +52,18 @@ async function getStableSession() {
   return null;
 }
 
+// أثناء التنقل السريع بين الصفحات قد تحتاج صفحة جديدة لحظات حتى تقرأ
+// الـ session المستمرة من التخزين. لا نعيد توجيه المستخدم فورًا إلى Login.
+async function waitForStableSession() {
+  const attempts = 6;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const session = await getStableSession();
+    if (session) return session;
+    if (attempt < attempts - 1) await sleep(250);
+  }
+  return null;
+}
+
 async function getStableProfile(userId) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -81,12 +93,10 @@ async function getStableProfile(userId) {
 }
 
 async function requireAuth() {
-  let session = await getStableSession();
-
-  if (!session) {
-    await sleep(500);
-    session = await getStableSession();
-  }
+  // لا نعمل refreshSession() يدويًا هنا؛ Supabase autoRefreshToken
+  // مسؤول عن التجديد. إعادة الـ refresh عند كل صفحة كانت تسبب race
+  // و429/token_revoked عند التنقل السريع.
+  const session = await waitForStableSession();
 
   if (!session) {
     if (!farmaRedirectingToLogin) {
@@ -96,9 +106,6 @@ async function requireAuth() {
     return null;
   }
 
-  // لا نستدعي refreshSession() يدويًا هنا.
-  // Supabase autoRefreshToken يتولى التجديد في الخلفية، وتجنّب refresh
-  // في كل صفحة يمنع سباق refresh-token عند التنقل السريع بين الصفحات.
   return requireAuthWithSession(session);
 }
 
@@ -107,11 +114,13 @@ async function requireAuthWithSession(session) {
 
   if (profile) return { user: session.user, profile };
 
+  // فشل profile مؤقتًا لا يعني أن الـ session انتهت.
   if (farmaLastKnownProfile) {
     console.warn('Profile temporarily unavailable; using last verified profile.');
     return { user: session.user, profile: farmaLastKnownProfile };
   }
 
+  // لا نعمل signOut ولا نعتبر المستخدم logged out بسبب فشل استعلام profiles.
   return {
     user: session.user,
     profile: {
@@ -156,13 +165,16 @@ function guardPageAccess(profile, pageKey) {
   const link = document.createElement('link');
   link.id = 'farmaSidebarCss';
   link.rel = 'stylesheet';
-  link.href = 'sidebar.css?v=4';
+  link.href = 'sidebar.css?v=5';
   document.head.appendChild(link);
 })();
 
 function setupFarmaSidebar() {
   const sidebar = document.querySelector('nav');
-  if (!sidebar) return;
+  if (!sidebar) {
+    document.body.classList.add('farma-sidebar-ready');
+    return;
+  }
 
   const links = Array.from(sidebar.querySelectorAll('a[href$=".html"]'));
   if (!links.length || sidebar.dataset.farmaBuilt === '1') {
