@@ -184,6 +184,20 @@ function setupFarmaSidebar() {
 document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
 
 // ============================================================
+// تحميل تحسينات صفحة المخزون
+// ============================================================
+(function loadInventoryEnhancements() {
+  const isInventoryPage = /(^|\/)inventory\.html$/i.test(window.location.pathname);
+  if (!isInventoryPage) return;
+  if (document.getElementById('farmaInventoryEnhancements')) return;
+
+  const script = document.createElement('script');
+  script.id = 'farmaInventoryEnhancements';
+  script.src = 'inventory-enhancements.js?v=1';
+  document.head.appendChild(script);
+})();
+
+// ============================================================
 // إصلاح فلترة المبيعات حسب تاريخ القاهرة
 // ============================================================
 // Supabase يخزن created_at كـ timestamptz. فلتر "اليوم" كان يعتمد
