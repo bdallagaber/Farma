@@ -56,7 +56,7 @@ function guardPageAccess(profile, pageKey) {
   const link = document.createElement('link');
   link.id = 'farmaSidebarCss';
   link.rel = 'stylesheet';
-  link.href = 'sidebar.css?v=2';
+  link.href = 'sidebar.css?v=3';
   document.head.appendChild(link);
 })();
 
@@ -144,7 +144,7 @@ function setupFarmaSidebar() {
   singles.forEach(([href, icon, fallbackLabel]) => {
     const a = byHref[href];
     if (!a) return;
-    const label = a.textContent.trim() || fallbackLabel;
+    const label = href === 'users.html' ? fallbackLabel : (a.textContent.trim() || fallbackLabel);
     a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>';
     if (href.toLowerCase() === currentFile || a.classList.contains('active')) a.classList.add('active');
     sidebar.appendChild(a);
