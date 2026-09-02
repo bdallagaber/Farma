@@ -9,175 +9,106 @@
 <script src="xlsx-lib.js"></script>
 <link rel="stylesheet" href="style.css">
 <style>
-/* =========================================================
-   إصلاح تخطيط سلة المبيعات - الكمبيوتر والموبايل
-   ========================================================= */
-#cartWrap {
-  width: 100%;
-  max-width: 100%;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-#cartWrap table {
-  width: 100%;
-  max-width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
-}
-
-#cartWrap th,
-#cartWrap td {
-  vertical-align: middle;
-  box-sizing: border-box;
-}
-
-/* عمود الحذف ثابت وواضح */
-#cartWrap th:last-child,
-#cartWrap td:last-child {
-  width: 70px !important;
-  min-width: 70px !important;
-  max-width: 70px !important;
-  text-align: center;
-  padding-left: 4px !important;
-  padding-right: 4px !important;
-}
-
-#cartWrap td:last-child button {
-  display: inline-block !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  width: 58px !important;
-  min-width: 58px !important;
-  max-width: 58px !important;
-  margin: 0 auto !important;
-  padding: 7px 4px !important;
-  white-space: nowrap !important;
-  box-sizing: border-box;
-}
-
-#cartWrap td:first-child {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-#cartWrap td:nth-child(2) > div {
-  display: flex !important;
-  align-items: center;
-  gap: 5px !important;
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-
-#cartWrap td:nth-child(2) input[type="number"] {
-  width: 55px !important;
-  min-width: 55px !important;
-  max-width: 55px !important;
-  box-sizing: border-box;
-}
-
-#cartWrap td:nth-child(2) select {
-  width: auto !important;
-  min-width: 82px !important;
-  max-width: 100% !important;
-  box-sizing: border-box;
-}
-
-#cartWrap td:nth-child(3) input[type="number"] {
-  width: 78px !important;
-  min-width: 78px !important;
-  max-width: 100% !important;
-  box-sizing: border-box;
-}
-
+/* تحسين سلة المبيعات على الشاشات الصغيرة — بدون تغيير تخطيط الكمبيوتر */
 @media (max-width: 600px) {
   #cartWrap {
+    width: 100%;
+    max-width: 100%;
     overflow-x: hidden;
   }
 
   #cartWrap table {
     width: 100% !important;
-    min-width: 0 !important;
+    max-width: 100%;
     table-layout: fixed !important;
+    border-collapse: collapse;
   }
 
   #cartWrap th,
   #cartWrap td {
-    padding: 6px 3px !important;
-    font-size: 12px;
+    vertical-align: middle !important;
+    box-sizing: border-box;
   }
 
-  /* مجموع الأعمدة = 100%، مع عمود حذف ثابت */
+  /* اسم المنتج | الكمية والوحدة | السعر | الحذف */
   #cartWrap th:first-child,
   #cartWrap td:first-child {
-    width: 29% !important;
+    width: 27% !important;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   #cartWrap th:nth-child(2),
   #cartWrap td:nth-child(2) {
-    width: 36% !important;
+    width: 35% !important;
   }
 
   #cartWrap th:nth-child(3),
   #cartWrap td:nth-child(3) {
-    width: calc(100% - 29% - 36% - 54px) !important;
+    width: 25% !important;
   }
 
   #cartWrap th:last-child,
   #cartWrap td:last-child {
-    width: 54px !important;
-    min-width: 54px !important;
-    max-width: 54px !important;
-    padding: 5px 1px !important;
+    width: 13% !important;
+    min-width: 46px !important;
     text-align: center !important;
+    vertical-align: middle !important;
+    padding: 6px 2px !important;
   }
 
   #cartWrap td:nth-child(2) > div {
+    display: flex !important;
+    align-items: center !important;
     gap: 3px !important;
     flex-wrap: wrap !important;
     width: 100%;
+    max-width: 100%;
   }
 
   #cartWrap td:nth-child(2) input[type="number"] {
-    width: 43px !important;
-    min-width: 43px !important;
-    max-width: 43px !important;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
     padding: 5px 2px !important;
-    font-size: 12px !important;
+    box-sizing: border-box;
   }
 
   #cartWrap td:nth-child(2) select {
-    width: 64px !important;
-    min-width: 64px !important;
-    max-width: 64px !important;
+    width: 66px !important;
+    min-width: 66px !important;
+    max-width: 66px !important;
     padding: 5px 2px !important;
-    font-size: 11px !important;
+    box-sizing: border-box;
   }
 
   #cartWrap td:nth-child(3) input[type="number"] {
-    width: 60px !important;
-    min-width: 60px !important;
-    max-width: 60px !important;
-    padding: 5px 2px !important;
-    font-size: 12px !important;
+    width: 78px !important;
+    min-width: 78px !important;
+    max-width: 100% !important;
+    padding: 5px 3px !important;
+    box-sizing: border-box;
   }
 
   #cartWrap td:last-child button {
-    display: inline-block !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    width: 48px !important;
-    min-width: 48px !important;
-    max-width: 48px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    vertical-align: middle !important;
+    width: 46px !important;
+    min-width: 46px !important;
+    max-width: 46px !important;
     height: 34px !important;
-    padding: 6px 2px !important;
     margin: 0 auto !important;
+    padding: 0 3px !important;
     font-size: 11px !important;
-    line-height: 20px !important;
+    line-height: 1 !important;
     white-space: nowrap !important;
+    box-sizing: border-box;
   }
 }
-</style></head>
+</style>
+</head>
 <body class="has-sidebar">
 
 <header>
