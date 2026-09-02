@@ -4,17 +4,19 @@
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
 
+// مهم: صفحة واحدة فقط هي التي تدير الـ session أثناء التنقل.
+// لا نستخدم autoRefreshToken هنا لأن كل صفحة HTML تنشئ Supabase client جديد،
+// ووجود أكثر من client يحاول refresh نفس refresh-token ممكن يعمل token_revoked.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
-    autoRefreshToken: true,
+    autoRefreshToken: false,
     detectSessionInUrl: false,
     storage: window.localStorage,
     storageKey: 'farma-auth'
   }
 });
 
-// امنع ظهور الـ layout القديم أثناء تجهيز الـ sidebar.
 (function installSidebarPreloadGuard() {
   if (document.getElementById('farmaSidebarPreloadGuard')) return;
   const style = document.createElement('style');
@@ -30,6 +32,7 @@ async function sleep(ms) {
 let farmaRedirectingToLogin = false;
 let farmaLastKnownSession = null;
 let farmaLastKnownProfile = null;
+let farmaAuthInitialized = false;
 
 try {
   const cachedProfile = localStorage.getItem('farma-profile-cache');
@@ -52,20 +55,49 @@ async function getStableSession() {
   return null;
 }
 
-// عند فتح صفحة جديدة، سيشن Supabase قد تحتاج لحظات حتى تُقرأ من التخزين.
-// ننتظر عدة مرات بدل ما نعتبر المستخدم Logged out بسبب تأخير لحظي.
+// Refresh فقط عندما تكون الجلسة قريبة من الانتهاء.
+// لا يتم refresh عند كل انتقال بين صفحات النظام.
+async function refreshIfNeeded(session) {
+  if (!session) return null;
+
+  const expiresAt = Number(session.expires_at || 0) * 1000;
+  const remaining = expiresAt ? expiresAt - Date.now() : 0;
+
+  // لو الجلسة لسه صالحة لأكثر من 10 دقائق، ممنوع نلمس الـ refresh token.
+  if (remaining > 10 * 60 * 1000) return session;
+
+  try {
+    const { data, error } = await sb.auth.refreshSession({
+      refresh_token: session.refresh_token
+    });
+
+    if (!error && data?.session) {
+      farmaLastKnownSession = data.session;
+      return data.session;
+    }
+
+    console.warn('Session refresh failed:', error);
+  } catch (err) {
+    console.warn('Session refresh exception:', err);
+  }
+
+  // لو الـ access token لسه صالح، نكمل به بدل logout.
+  if (expiresAt > Date.now()) return session;
+  return null;
+}
+
 async function waitForStableSession() {
-  const attempts = 10;
-  for (let attempt = 0; attempt < attempts; attempt++) {
+  // قراءة واحدة + retry قصير؛ لا توجد سلسلة refresh calls.
+  for (let attempt = 0; attempt < 4; attempt++) {
     const session = await getStableSession();
-    if (session) return session;
-    if (attempt < attempts - 1) await sleep(300);
+    if (session) return refreshIfNeeded(session);
+    if (attempt < 3) await sleep(350);
   }
   return null;
 }
 
 async function getStableProfile(userId) {
-  for (let attempt = 0; attempt < 5; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     try {
       const { data, error } = await sb
         .from('profiles')
@@ -87,17 +119,22 @@ async function getStableProfile(userId) {
       console.warn('Profile lookup exception:', err);
     }
 
-    if (attempt < 4) await sleep(400 * (attempt + 1));
+    if (attempt < 3) await sleep(400 * (attempt + 1));
   }
   return null;
 }
 
 async function requireAuth() {
+  if (farmaAuthInitialized) {
+    const session = await getStableSession();
+    return session ? requireAuthWithSession(session) : null;
+  }
+
+  farmaAuthInitialized = true;
   const session = await waitForStableSession();
 
   if (!session) {
-    // لا نعمل refreshSession() يدويًا هنا؛ ده كان سبب race و token_revoked.
-    // إعادة التوجيه تحصل فقط بعد انتهاء كل محاولات قراءة الـ session.
+    // لا نعمل redirect إلا لو لا يوجد session فعلًا بعد كل المحاولات.
     if (!farmaRedirectingToLogin) {
       farmaRedirectingToLogin = true;
       window.location.replace('index.html');
@@ -113,13 +150,12 @@ async function requireAuthWithSession(session) {
 
   if (profile) return { user: session.user, profile };
 
-  // فشل profile مؤقتًا لا يعني أن الـ session انتهت.
   if (farmaLastKnownProfile) {
     console.warn('Profile temporarily unavailable; using last verified profile.');
     return { user: session.user, profile: farmaLastKnownProfile };
   }
 
-  // لا نعمل signOut بسبب فشل استعلام profiles.
+  // فشل profiles ليس Logout.
   return {
     user: session.user,
     profile: {
@@ -142,11 +178,8 @@ function guardPageAccess(profile, pageKey) {
 
   document.querySelectorAll('nav a[href$=".html"]').forEach(a => {
     const key = a.getAttribute('href').replace('.html', '');
-    if (key === 'users') {
-      a.style.display = 'none';
-    } else if (!allowed.includes(key)) {
-      a.style.display = 'none';
-    }
+    if (key === 'users') a.style.display = 'none';
+    else if (!allowed.includes(key)) a.style.display = 'none';
   });
 
   if (!allowed.includes(pageKey)) {
@@ -182,11 +215,9 @@ function setupFarmaSidebar() {
   }
 
   sidebar.dataset.farmaBuilt = '1';
-
   const currentFile = (location.pathname.split('/').pop() || 'inventory.html').toLowerCase();
   const byHref = {};
   links.forEach(a => { byHref[a.getAttribute('href')] = a; });
-
   sidebar.innerHTML = '';
 
   const brand = document.createElement('div');
@@ -212,7 +243,6 @@ function setupFarmaSidebar() {
 
     const wrapper = document.createElement('div');
     wrapper.className = 'farma-nav-group';
-
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'farma-nav-group-toggle';
@@ -222,8 +252,8 @@ function setupFarmaSidebar() {
     sub.className = 'farma-nav-sub';
     const inner = document.createElement('div');
     inner.className = 'farma-nav-sub-inner';
-
     let hasCurrent = false;
+
     existing.forEach(a => {
       const href = a.getAttribute('href');
       const label = a.textContent.trim();
@@ -240,7 +270,6 @@ function setupFarmaSidebar() {
     wrapper.appendChild(toggle);
     wrapper.appendChild(sub);
     sidebar.appendChild(wrapper);
-
     if (hasCurrent) wrapper.classList.add('open');
     toggle.addEventListener('click', () => wrapper.classList.toggle('open'));
   }
@@ -272,9 +301,7 @@ function setupFarmaSidebar() {
 
   const saved = localStorage.getItem('farmaSidebarCollapsed') === '1';
   setCollapsed(saved);
-  collapse.addEventListener('click', () => {
-    setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed'));
-  });
+  collapse.addEventListener('click', () => setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed')));
 
   const overlay = document.getElementById('sidebarOverlay');
   const toggleMobile = document.getElementById('menuToggle');
@@ -302,21 +329,9 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   const isInventoryPage = /(^|\/)inventory\.html$/i.test(window.location.pathname);
   if (!isInventoryPage) return;
   if (document.getElementById('farmaInventoryEnhancements')) return;
-
   const script = document.createElement('script');
   script.id = 'farmaInventoryEnhancements';
   script.src = 'inventory-enhancements.js?v=1';
-  document.head.appendChild(script);
-})();
-
-(function loadInventoryRecovery() {
-  const isInventoryPage = /(^|\/)inventory\.html$/i.test(window.location.pathname);
-  if (!isInventoryPage) return;
-  if (document.getElementById('farmaInventoryRecovery')) return;
-
-  const script = document.createElement('script');
-  script.id = 'farmaInventoryRecovery';
-  script.src = 'inventory-recovery.js?v=1';
   document.head.appendChild(script);
 })();
 
@@ -327,24 +342,14 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   const cairoParts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit'
   }).formatToParts(new Date());
-
-  const getPart = type => {
-    const part = cairoParts.find(p => p.type === type);
-    return part ? part.value : '';
-  };
-
+  const getPart = type => cairoParts.find(p => p.type === type)?.value || '';
   const cairoToday = { year: Number(getPart('year')), month: Number(getPart('month')), day: Number(getPart('day')) };
-
-  const cairoStartIso = (year, month, day) => {
-    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
-  };
-
+  const cairoStartIso = (year, month, day) => new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
   const shiftCairoDate = (year, month, day, deltaDays) => {
     const d = new Date(Date.UTC(year, month - 1, day));
     d.setUTCDate(d.getUTCDate() + deltaDays);
     return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
   };
-
   const originalGetRangeStart = window.getRangeStart;
 
   setTimeout(() => {
@@ -361,7 +366,6 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
       }
       return typeof originalGetRangeStart === 'function' ? originalGetRangeStart(range) : null;
     };
-
     if (typeof window.loadRecentSales === 'function') window.loadRecentSales();
   }, 0);
 })();
