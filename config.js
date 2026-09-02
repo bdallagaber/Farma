@@ -2,27 +2,102 @@
 // إعدادات الاتصال بـ Supabase - ملف مشترك تستخدمه كل صفحات السيستم
 // ============================================================
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
+const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-sb_publishable_XDFuq8hI4IEBRo-sU5WW0";
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    storage: window.localStorage,
+    storageKey: 'farma-auth'
+  }
+});
+
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function getStableSession() {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { data, error } = await sb.auth.getSession();
+      if (!error && data?.session) return data.session;
+
+      if (attempt < 2) await sleep(500 * (attempt + 1));
+    } catch (err) {
+      console.warn('Session lookup attempt failed:', err);
+      if (attempt < 2) await sleep(500 * (attempt + 1));
+    }
+  }
+
+  try {
+    const { data, error } = await sb.auth.refreshSession();
+    if (!error && data?.session) return data.session;
+  } catch (err) {
+    console.warn('Session refresh failed:', err);
+  }
+
+  return null;
+}
+
+async function getStableProfile(userId) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const { data, error } = await sb
+        .from('profiles')
+        .select('role, full_name, allowed_pages')
+        .eq('id', userId)
+        .single();
+
+      if (!error && data) return data;
+      console.warn('Profile lookup attempt failed:', error);
+    } catch (err) {
+      console.warn('Profile lookup exception:', err);
+    }
+
+    if (attempt < 2) await sleep(500 * (attempt + 1));
+  }
+
+  return null;
+}
 
 async function requireAuth() {
-  const { data: { session } } = await sb.auth.getSession();
+  const session = await getStableSession();
+
   if (!session) {
     window.location.href = 'index.html';
     return null;
   }
-  const { data: profile, error } = await sb
-    .from('profiles')
-    .select('role, full_name, allowed_pages')
-    .eq('id', session.user.id)
-    .single();
-  if (error || !profile) {
-    window.location.href = 'index.html';
-    return null;
+
+  const profile = await getStableProfile(session.user.id);
+
+  // لا نعملش redirect بسبب مشكلة شبكة/استعلام مؤقت.
+  // لو الـ session نفسها موجودة، ندي فرصة للصفحة تكمل بدل ما يظهر للمستخدم إنه اتعمله logout.
+  if (!profile) {
+    console.warn('Profile temporarily unavailable; keeping active session.');
+    return {
+      user: session.user,
+      profile: {
+        role: 'employee',
+        full_name: session.user.email || 'مستخدم',
+        allowed_pages: []
+      }
+    };
   }
+
   return { user: session.user, profile };
 }
+
+// راقب تغييرات المصادقة، لكن لا نطرد المستخدم بسبب INITIAL_SESSION أو أخطاء مؤقتة.
+sb.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT' && !session) {
+    const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
+    if (currentPage && currentPage !== 'index.html') {
+      window.location.href = 'index.html';
+    }
+  }
+});
 
 function guardPageAccess(profile, pageKey) {
   if (profile.role === 'admin') return true;
