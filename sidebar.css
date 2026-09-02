@@ -366,3 +366,26 @@ body.farma-sidebar-collapsed nav a.active::before {
 
   body.farma-sidebar-ready header { width: 100%; }
 }
+
+/* ============================================================
+   Desktop page-layout correction
+   style.css has an older flex layout for .has-sidebar. The new
+   sidebar is fixed, so page content must remain in normal flow.
+   ============================================================ */
+@media (min-width: 900px) {
+  body.has-sidebar.farma-sidebar-ready {
+    display: block;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 16px;
+    padding-right: calc(var(--farma-sidebar-width) + 32px);
+  }
+
+  body.has-sidebar.farma-sidebar-ready > header,
+  body.has-sidebar.farma-sidebar-ready > .main-content {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+}
