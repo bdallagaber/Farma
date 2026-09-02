@@ -11,14 +11,10 @@
   if (!/(^|\/)inventory\.html$/i.test(window.location.pathname)) return;
 
   const UNCLASSIFIED = '__unclassified__';
-  const extraState = {
-    supplier: [],
-    ingredient: [],
-    concentration: []
-  };
-
+  const extraState = { supplier: [], ingredient: [], concentration: [] };
   let initialized = false;
   let rendering = false;
+  let extraSignature = '';
 
   function esc(value) {
     const div = document.createElement('div');
@@ -31,9 +27,7 @@
   }
 
   function unique(values) {
-    return Array.from(new Set((values || [])
-      .filter(v => !isBlank(v))
-      .map(v => String(v).trim())))
+    return Array.from(new Set((values || []).filter(v => !isBlank(v)).map(v => String(v).trim())))
       .sort((a, b) => new Intl.Collator('ar', { sensitivity: 'base', numeric: true }).compare(a, b));
   }
 
@@ -44,8 +38,7 @@
   function matchesExtra(product, field, values) {
     if (!values.length) return true;
     const raw = product[field];
-    const isMissing = isBlank(raw);
-    return values.some(v => v === UNCLASSIFIED ? isMissing : String(raw || '').trim() === v);
+    return values.some(v => v === UNCLASSIFIED ? isBlank(raw) : String(raw || '').trim() === v);
   }
 
   function getExtraFilteredProducts() {
@@ -59,31 +52,23 @@
 
   function withTemporaryUnclassifiedMarkers(products, callback) {
     const touched = [];
-    const fields = ['shape', 'drug_type'];
-
-    products.forEach(p => {
-      fields.forEach(field => {
+    ['shape', 'drug_type'].forEach(field => {
+      products.forEach(p => {
         if (isBlank(p[field])) {
           touched.push([p, field, p[field]]);
           p[field] = UNCLASSIFIED;
         }
       });
     });
-
-    try {
-      return callback();
-    } finally {
-      touched.forEach(([p, field, value]) => { p[field] = value; });
-    }
+    try { return callback(); }
+    finally { touched.forEach(([p, field, value]) => { p[field] = value; }); }
   }
 
-  function updateHeaderCount(visibleCount, totalCount) {
-    const title = document.querySelector('.card h2');
+  function updateHeaderCount(totalCount) {
     const stockTitle = Array.from(document.querySelectorAll('.card h2')).find(h =>
       (h.textContent || '').includes('المخزون الحالي')
     );
-    const host = stockTitle ? stockTitle.parentElement : null;
-    if (!host) return;
+    if (!stockTitle) return;
 
     let box = document.getElementById('inventoryCountSummary');
     if (!box) {
@@ -94,40 +79,35 @@
     }
 
     const table = document.querySelector('#tableWrap table');
-    const actualVisible = table ? table.querySelectorAll('tbody tr').length : visibleCount;
-
+    const visible = table ? table.querySelectorAll('tbody tr').length : 0;
     box.innerHTML =
       '<span><strong>إجمالي المنتجات:</strong> ' + totalCount + '</span>' +
-      '<span><strong>المعروض حاليًا:</strong> ' + actualVisible + '</span>';
+      '<span><strong>المعروض حاليًا:</strong> ' + visible + '</span>';
   }
 
   function getCurrentVisibleBase(searchText) {
     const term = (searchText || '').trim();
     const source = getExtraFilteredProducts();
+    const shape = selected('shapeChk');
+    const type = selected('typeChk');
+    const cls = selected('classChk');
+    const avail = selected('availChk');
 
     return source.filter(p => {
       if (term && typeof window.fuzzyIncludes === 'function' &&
           !window.fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term)) return false;
+      if (shape.length && !shape.includes(isBlank(p.shape) ? UNCLASSIFIED : p.shape)) return false;
+      if (type.length && !type.includes(isBlank(p.drug_type) ? UNCLASSIFIED : p.drug_type)) return false;
+      if (cls.length && !cls.includes(isBlank(p.classification) ? UNCLASSIFIED : p.classification)) return false;
 
-      const shape = selected('shapeChk');
-      const type = selected('typeChk');
-      const cls = selected('classChk');
-      const avail = selected('availChk');
-
-      const shapeOk = !shape.length || shape.includes(isBlank(p.shape) ? UNCLASSIFIED : p.shape);
-      const typeOk = !type.length || type.includes(isBlank(p.drug_type) ? UNCLASSIFIED : p.drug_type);
-
-      const classOk = !cls.length || cls.includes(isBlank(p.classification) ? UNCLASSIFIED : p.classification);
-
-      let availOk = true;
       if (avail.length && typeof window.getAvailabilityState === 'function') {
         const state = window.getAvailabilityState(p);
-        availOk = (avail.includes('available') && state.available) ||
-                  (avail.includes('unavailable') && state.unavailable) ||
-                  (avail.includes('low') && state.low);
+        const ok = (avail.includes('available') && state.available) ||
+                   (avail.includes('unavailable') && state.unavailable) ||
+                   (avail.includes('low') && state.low);
+        if (!ok) return false;
       }
-
-      return shapeOk && typeOk && classOk && availOk;
+      return true;
     });
   }
 
@@ -141,21 +121,20 @@
 
     try {
       window._productsCache = filteredCache;
-      withTemporaryUnclassifiedMarkers(filteredCache, () => {
-        window.renderInventoryTable(search);
-      });
+      withTemporaryUnclassifiedMarkers(filteredCache, () => window.renderInventoryTable(search));
     } finally {
       window._productsCache = originalCache;
       rendering = false;
     }
 
     updateAllFilterCounts();
-    updateHeaderCount(getCurrentVisibleBase(search).length, originalCache.length);
+    updateHeaderCount(originalCache.length);
+    updateExtraCounts();
   }
 
   function appendUnclassified(boxId, groupClass, labelText) {
     const box = document.getElementById(boxId);
-    if (!box || box.querySelector('[data-unclassified="1"]')) return;
+    if (!box || box.querySelector('input.' + groupClass + '[value="' + UNCLASSIFIED + '"]')) return;
 
     const label = document.createElement('label');
     label.setAttribute('data-unclassified', '1');
@@ -167,11 +146,14 @@
   }
 
   function updateAllFilterCounts() {
-    ['shapeChk', 'typeChk', 'classChk', 'availChk'].forEach((cls, i) => {
-      const ids = ['filterShapeCount', 'filterTypeCount', 'filterClassCount', 'filterAvailabilityCount'];
-      if (typeof window.updateFilterCount === 'function') {
-        window.updateFilterCount(cls, ids[i]);
-      }
+    const pairs = [
+      ['shapeChk', 'filterShapeCount'],
+      ['typeChk', 'filterTypeCount'],
+      ['classChk', 'filterClassCount'],
+      ['availChk', 'filterAvailabilityCount']
+    ];
+    pairs.forEach(([cls, id]) => {
+      if (typeof window.updateFilterCount === 'function') window.updateFilterCount(cls, id);
     });
   }
 
@@ -179,15 +161,16 @@
     const box = document.getElementById(boxId);
     if (!box) return;
 
-    const source = window._productsCache || [];
-    const values = unique(source.map(p => p[field]));
+    const stateKey = field === 'active_ingredient' ? 'ingredient' : field;
+    const previous = new Set(extraState[stateKey]);
+    const values = unique((window._productsCache || []).map(p => p[field]));
     box.innerHTML = '';
 
-    const all = [UNCLASSIFIED, ...values];
-    all.forEach(value => {
+    [UNCLASSIFIED, ...values].forEach(value => {
       const label = document.createElement('label');
+      const checked = previous.has(value) ? ' checked' : '';
       label.innerHTML =
-        '<input type="checkbox" class="' + groupClass + '" value="' + esc(value) + '"> ' +
+        '<input type="checkbox" class="' + groupClass + '" value="' + esc(value) + '"' + checked + '> ' +
         '<span>' + esc(value === UNCLASSIFIED ? 'غير مصنف' : value) + '</span> ' +
         '<span class="filter-option-count" data-filter-group="' + groupClass + '" data-filter-value="' + esc(value) + '">(0)</span>';
       box.appendChild(label);
@@ -195,8 +178,8 @@
 
     box.querySelectorAll('input').forEach(chk => {
       chk.addEventListener('change', () => {
-        extraState[field === 'active_ingredient' ? 'ingredient' : field] = selected(groupClass);
-        const n = selected(groupClass).length;
+        extraState[stateKey] = selected(groupClass);
+        const n = extraState[stateKey].length;
         const summary = document.getElementById(summaryId);
         if (summary) summary.textContent = n ? '(' + n + ')' : '';
         rerender();
@@ -204,9 +187,18 @@
     });
 
     const details = box.closest('details');
-    if (details) {
-      details.querySelector('summary').firstChild.textContent = title + ' ';
-    }
+    if (details) details.querySelector('summary').firstChild.textContent = title + ' ';
+  }
+
+  function refreshExtraFiltersIfNeeded() {
+    if (!initialized) return;
+    const products = window._productsCache || [];
+    const signature = products.map(p => [p.id, p.supplier || '', p.active_ingredient || '', p.concentration || ''].join('|')).join('§');
+    if (signature === extraSignature) return;
+    extraSignature = signature;
+    buildExtraFilter('filterSupplierBox', 'filterSupplierCount', 'supplierChk', 'supplier', 'المورد');
+    buildExtraFilter('filterIngredientBox', 'filterIngredientCount', 'ingredientChk', 'active_ingredient', 'المادة الفعالة');
+    buildExtraFilter('filterConcentrationBox', 'filterConcentrationCount', 'concentrationChk', 'concentration', 'التركيز');
   }
 
   function addExtraFilterDetails() {
@@ -214,13 +206,13 @@
     if (!toolbar || document.getElementById('filterIngredientPanel')) return;
 
     const definitions = [
-      ['filterSupplierPanel', 'filterSupplierBox', 'filterSupplierCount', 'supplierChk', 'supplier', 'المورد'],
-      ['filterIngredientPanel', 'filterIngredientBox', 'filterIngredientCount', 'ingredientChk', 'active_ingredient', 'المادة الفعالة'],
-      ['filterConcentrationPanel', 'filterConcentrationBox', 'filterConcentrationCount', 'concentrationChk', 'concentration', 'التركيز']
+      ['filterSupplierPanel', 'filterSupplierBox', 'filterSupplierCount', 'المورد'],
+      ['filterIngredientPanel', 'filterIngredientBox', 'filterIngredientCount', 'المادة الفعالة'],
+      ['filterConcentrationPanel', 'filterConcentrationBox', 'filterConcentrationCount', 'التركيز']
     ];
 
     const exportBtn = document.getElementById('exportBtn');
-    definitions.forEach(([panelId, boxId, countId, cls, field, title]) => {
+    definitions.forEach(([panelId, boxId, countId, title]) => {
       const details = document.createElement('details');
       details.className = 'filter-panel';
       details.id = panelId;
@@ -248,9 +240,9 @@
     if (search) search.insertAdjacentElement('afterend', wrap);
     else toolbar.prepend(wrap);
 
-    const saved = localStorage.getItem('farmaInventorySort');
-    wrap.querySelector('select').value = saved || 'ar_asc';
-    wrap.querySelector('select').addEventListener('change', e => {
+    const select = wrap.querySelector('select');
+    select.value = localStorage.getItem('farmaInventorySort') || 'ar_asc';
+    select.addEventListener('change', e => {
       localStorage.setItem('farmaInventorySort', e.target.value);
       rerender();
     });
@@ -269,9 +261,7 @@
     document.addEventListener('change', e => {
       const target = e.target;
       if (!target || target.type !== 'checkbox') return;
-      const filterClasses = ['shapeChk', 'typeChk', 'classChk', 'availChk'];
-      if (!filterClasses.includes(target.className)) return;
-
+      if (!['shapeChk', 'typeChk', 'classChk', 'availChk'].includes(target.className)) return;
       e.stopImmediatePropagation();
       updateAllFilterCounts();
       rerender();
@@ -283,21 +273,17 @@
       const box = document.getElementById(id);
       if (!box || box.dataset.farmaObserved === '1') return;
       box.dataset.farmaObserved = '1';
-      new MutationObserver(() => {
-        addUnclassifiedOptions();
-      }).observe(box, { childList: true });
+      new MutationObserver(() => setTimeout(addUnclassifiedOptions, 0)).observe(box, { childList: true });
     });
   }
 
   function updateExtraCounts() {
     const products = getCurrentVisibleBase(document.getElementById('searchBox')?.value || '');
-    const definitions = [
-      ['supplierChk', 'supplier', 'filterSupplierBox'],
-      ['ingredientChk', 'active_ingredient', 'filterIngredientBox'],
-      ['concentrationChk', 'concentration', 'filterConcentrationBox']
-    ];
-
-    definitions.forEach(([cls, field, boxId]) => {
+    [
+      ['active_ingredient', 'filterIngredientBox'],
+      ['supplier', 'filterSupplierBox'],
+      ['concentration', 'filterConcentrationBox']
+    ].forEach(([field, boxId]) => {
       document.querySelectorAll('#' + boxId + ' .filter-option-count').forEach(span => {
         const value = span.dataset.filterValue;
         const count = products.filter(p => value === UNCLASSIFIED ? isBlank(p[field]) : String(p[field] || '').trim() === value).length;
@@ -309,10 +295,9 @@
   function boot() {
     if (initialized) return;
     if (typeof window.renderInventoryTable !== 'function') return;
-    if (!document.getElementById('filterShapeBox')) return;
+    if (!document.getElementById('filterShapeBox') || !window._productsCache) return;
 
     initialized = true;
-
     addSortControl();
     addExtraFilterDetails();
     addUnclassifiedOptions();
@@ -322,40 +307,37 @@
     buildExtraFilter('filterSupplierBox', 'filterSupplierCount', 'supplierChk', 'supplier', 'المورد');
     buildExtraFilter('filterIngredientBox', 'filterIngredientCount', 'ingredientChk', 'active_ingredient', 'المادة الفعالة');
     buildExtraFilter('filterConcentrationBox', 'filterConcentrationCount', 'concentrationChk', 'concentration', 'التركيز');
+    extraSignature = (window._productsCache || []).map(p => [p.id, p.supplier || '', p.active_ingredient || '', p.concentration || ''].join('|')).join('§');
 
     const search = document.getElementById('searchBox');
     if (search) {
-      search.addEventListener('input', () => {
-        setTimeout(() => {
-          rerender();
-          updateExtraCounts();
-        }, 0);
+      search.addEventListener('input', e => {
+        e.stopImmediatePropagation();
+        rerender();
       }, true);
     }
 
     const tableWrap = document.getElementById('tableWrap');
     if (tableWrap) {
       new MutationObserver(() => {
-        if (!rendering) {
-          updateHeaderCount(getCurrentVisibleBase(search?.value || '').length, (window._productsCache || []).length);
-          updateExtraCounts();
-        }
+        if (rendering) return;
+        refreshExtraFiltersIfNeeded();
+        updateHeaderCount((window._productsCache || []).length);
+        updateExtraCounts();
       }).observe(tableWrap, { childList: true, subtree: true });
     }
 
     setTimeout(() => {
+      refreshExtraFiltersIfNeeded();
       addUnclassifiedOptions();
       rerender();
-      updateExtraCounts();
     }, 50);
   }
 
   const timer = setInterval(() => {
     try {
-      if (window._productsCache && typeof window.renderInventoryTable === 'function') {
-        boot();
-        if (initialized) clearInterval(timer);
-      }
+      boot();
+      if (initialized) clearInterval(timer);
     } catch (err) {
       console.error('Farma inventory enhancements:', err);
     }
