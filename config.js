@@ -29,40 +29,32 @@ try {
   console.warn('Could not restore cached profile:', err);
 }
 
+// مهم: getSession() كفاية في الوضع الطبيعي. ما نعملش refreshSession()
+// بشكل متكرر لأن كل صفحة/تاب ممكن يحاول يستخدم نفس refresh token في نفس اللحظة،
+// وده كان بيسبب token rotation/rate-limit ثم تسجيل خروج المستخدم.
 async function getStableSession() {
-  for (let attempt = 0; attempt < 5; attempt++) {
-    try {
-      const { data, error } = await sb.auth.getSession();
-      if (!error && data?.session) {
-        farmaLastKnownSession = data.session;
-        return data.session;
-      }
-    } catch (err) {
-      console.warn('Session lookup attempt failed:', err);
-    }
-    await sleep(400 * (attempt + 1));
-  }
-
-  try {
-    const { data, error } = await sb.auth.refreshSession();
-    if (!error && data?.session) {
-      farmaLastKnownSession = data.session;
-      return data.session;
-    }
-    console.warn('Session refresh returned no session:', error);
-  } catch (err) {
-    console.warn('Session refresh failed:', err);
-  }
-
-  await sleep(1000);
   try {
     const { data, error } = await sb.auth.getSession();
     if (!error && data?.session) {
       farmaLastKnownSession = data.session;
       return data.session;
     }
+    if (error) console.warn('Session lookup failed:', error);
   } catch (err) {
-    console.warn('Final session restore failed:', err);
+    console.warn('Session lookup exception:', err);
+  }
+
+  // محاولة استعادة واحدة فقط عند عدم وجود session محليًا.
+  // autoRefreshToken مسؤول عن التجديد الطبيعي أثناء تشغيل السيستم.
+  try {
+    const { data, error } = await sb.auth.refreshSession();
+    if (!error && data?.session) {
+      farmaLastKnownSession = data.session;
+      return data.session;
+    }
+    if (error) console.warn('Single session refresh failed:', error);
+  } catch (err) {
+    console.warn('Single session refresh exception:', err);
   }
 
   return null;
@@ -101,11 +93,11 @@ async function requireAuth() {
   const session = await getStableSession();
 
   if (!session) {
-    await sleep(1500);
+    // لا نكرر refreshSession ولا نعمل redirect سريع بسبب خطأ مؤقت.
+    await sleep(1000);
     const recoveredSession = await getStableSession();
     if (recoveredSession) return requireAuthWithSession(recoveredSession);
 
-    // Only redirect after all recovery attempts fail. Never sign out here.
     if (!farmaRedirectingToLogin) {
       farmaRedirectingToLogin = true;
       window.location.replace('index.html');
@@ -121,15 +113,11 @@ async function requireAuthWithSession(session) {
 
   if (profile) return { user: session.user, profile };
 
-  // A temporary database/network outage must not destroy the user's access.
-  // Reuse the last verified permissions for this browser session if available.
   if (farmaLastKnownProfile) {
     console.warn('Profile temporarily unavailable; using last verified profile.');
     return { user: session.user, profile: farmaLastKnownProfile };
   }
 
-  // No cached permissions exist yet. Keep the authenticated session alive,
-  // but do not grant admin privileges as a fallback.
   return {
     user: session.user,
     profile: {
