@@ -2,7 +2,7 @@
 // إعدادات الاتصال بـ Supabase - ملف مشترك تستخدمه كل صفحات السيستم
 // ============================================================
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ4bnBwdXp1bGxm eXFlcXd4eXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTkyNzEsImV4cCI6MjEwMTUzNTI3MX0.kWCN1qai3IcbkiD30Ng-SmyqJGqTl6BHskNrcDJnEU8";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ4bnBwdXp1bGZ5eXF3eXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTkyNzEsImV4cCI6MjEwMTUzNTI3MX0.kWCN1qai3IcbkiD30Ng-SmyqJGqTl6BHskNrcDJnEU8";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -71,12 +71,8 @@ function setupFarmaSidebar() {
   sidebar.dataset.farmaBuilt = '1';
 
   const currentFile = (location.pathname.split('/').pop() || 'inventory.html').toLowerCase();
-
-  // حفظ الروابط الأصلية قبل إعادة تنظيمها.
   const byHref = {};
-  links.forEach(a => {
-    byHref[a.getAttribute('href')] = a;
-  });
+  links.forEach(a => { byHref[a.getAttribute('href')] = a; });
 
   sidebar.innerHTML = '';
 
@@ -91,13 +87,6 @@ function setupFarmaSidebar() {
   collapse.title = 'تصغير القائمة';
   collapse.textContent = '‹';
   sidebar.appendChild(collapse);
-
-  const home = byHref['index.html'];
-  if (home) {
-    home.classList.add('farma-nav-home');
-    home.innerHTML = '<span>🏠</span><span>الرئيسية</span>';
-    sidebar.appendChild(home);
-  }
 
   const groups = [
     { title: 'المخزون', icon: '📦', hrefs: ['inventory.html', 'shortages.html'] },
@@ -125,7 +114,8 @@ function setupFarmaSidebar() {
     existing.forEach(a => {
       const href = a.getAttribute('href');
       const label = a.textContent.trim();
-      a.innerHTML = '<span>' + (href === 'inventory.html' ? '📋' : href === 'shortages.html' ? '⚠️' : href === 'sales.html' ? '🧾' : '📑') + '</span><span>' + label + '</span>';
+      const icon = href === 'inventory.html' ? '📋' : href === 'shortages.html' ? '⚠️' : href === 'sales.html' ? '🧾' : '📑';
+      a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>';
       if (href.toLowerCase() === currentFile || a.classList.contains('active')) {
         a.classList.add('active');
         hasCurrent = true;
