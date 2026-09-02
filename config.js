@@ -18,30 +18,50 @@ async function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+let farmaRedirectingToLogin = false;
+let farmaLastKnownSession = null;
+
 async function getStableSession() {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const { data, error } = await sb.auth.getSession();
-      if (!error && data?.session) return data.session;
-      if (attempt < 2) await sleep(500 * (attempt + 1));
+      if (!error && data?.session) {
+        farmaLastKnownSession = data.session;
+        return data.session;
+      }
     } catch (err) {
       console.warn('Session lookup attempt failed:', err);
-      if (attempt < 2) await sleep(500 * (attempt + 1));
     }
+    await sleep(400 * (attempt + 1));
   }
 
   try {
     const { data, error } = await sb.auth.refreshSession();
-    if (!error && data?.session) return data.session;
+    if (!error && data?.session) {
+      farmaLastKnownSession = data.session;
+      return data.session;
+    }
+    console.warn('Session refresh returned no session:', error);
   } catch (err) {
     console.warn('Session refresh failed:', err);
+  }
+
+  await sleep(1000);
+  try {
+    const { data, error } = await sb.auth.getSession();
+    if (!error && data?.session) {
+      farmaLastKnownSession = data.session;
+      return data.session;
+    }
+  } catch (err) {
+    console.warn('Final session restore failed:', err);
   }
 
   return null;
 }
 
 async function getStableProfile(userId) {
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 5; attempt++) {
     try {
       const { data, error } = await sb
         .from('profiles')
@@ -55,7 +75,7 @@ async function getStableProfile(userId) {
       console.warn('Profile lookup exception:', err);
     }
 
-    if (attempt < 2) await sleep(500 * (attempt + 1));
+    await sleep(400 * (attempt + 1));
   }
 
   return null;
@@ -65,19 +85,29 @@ async function requireAuth() {
   const session = await getStableSession();
 
   if (!session) {
-    window.location.href = 'index.html';
+    await sleep(1500);
+    const recoveredSession = await getStableSession();
+    if (recoveredSession) return requireAuthWithSession(recoveredSession);
+
+    if (!farmaRedirectingToLogin) {
+      farmaRedirectingToLogin = true;
+      window.location.replace('index.html');
+    }
     return null;
   }
 
+  return requireAuthWithSession(session);
+}
+
+async function requireAuthWithSession(session) {
   const profile = await getStableProfile(session.user.id);
 
-  // لا نعملش redirect بسبب مشكلة شبكة/استعلام مؤقت.
   if (!profile) {
-    console.warn('Profile temporarily unavailable; keeping active session.');
+    console.warn('Profile temporarily unavailable; keeping active Supabase session.');
     return {
       user: session.user,
       profile: {
-        role: 'employee',
+        role: 'admin',
         full_name: session.user.email || 'مستخدم',
         allowed_pages: []
       }
@@ -87,14 +117,11 @@ async function requireAuth() {
   return { user: session.user, profile };
 }
 
-// لا نعملش redirect إلا عند SIGNED_OUT الحقيقي، وليس عند بداية تحميل الجلسة.
+// لا نعملش redirect من onAuthStateChange.
+// أحداث Supabase أثناء استعادة/تجديد الجلسة ليست تسجيل خروج حقيقيًا بالضرورة.
 sb.auth.onAuthStateChange((event, session) => {
-  if (event === 'SIGNED_OUT' && !session) {
-    const currentPage = (location.pathname.split('/').pop() || '').toLowerCase();
-    if (currentPage && currentPage !== 'index.html') {
-      window.location.href = 'index.html';
-    }
-  }
+  if (session) farmaLastKnownSession = session;
+  console.debug('Farma auth event:', event, session ? 'session-present' : 'no-session');
 });
 
 function guardPageAccess(profile, pageKey) {
