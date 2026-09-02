@@ -4,6 +4,7 @@
    - "غير مصنف" filters for existing categorical filters
    - Extra filters for supplier / active ingredient / concentration
    - Live product count
+   - Preserve the built-in "أمبول" dosage form
 ============================================================ */
 (function () {
   'use strict';
@@ -11,6 +12,7 @@
   if (!/(^|\/)inventory\.html$/i.test(window.location.pathname)) return;
 
   const UNCLASSIFIED = '__unclassified__';
+  const AMPoule_VALUE = 'ampoule';
   const extraState = { supplier: [], ingredient: [], concentration: [] };
   let initialized = false;
   let rendering = false;
@@ -33,6 +35,26 @@
 
   function selected(className) {
     return Array.from(document.querySelectorAll('.' + className + ':checked')).map(c => c.value);
+  }
+
+  // The original inventory page has "أمبول" as a built-in dosage form.
+  // Keep it available even if a later UI enhancement rebuilds the select options.
+  function ensureAmpouleOption() {
+    const select = document.getElementById('p_shape');
+    if (!select) return;
+
+    const exists = Array.from(select.options).some(option =>
+      option.value === AMPoule_VALUE ||
+      String(option.textContent || '').trim() === 'أمبول' ||
+      String(option.textContent || '').trim() === 'امبول'
+    );
+
+    if (!exists) {
+      const option = document.createElement('option');
+      option.value = AMPoule_VALUE;
+      option.textContent = 'أمبول';
+      select.appendChild(option);
+    }
   }
 
   function matchesExtra(product, field, values) {
@@ -127,6 +149,7 @@
       rendering = false;
     }
 
+    ensureAmpouleOption();
     updateAllFilterCounts();
     updateHeaderCount(originalCache.length);
     updateExtraCounts();
@@ -273,7 +296,10 @@
       const box = document.getElementById(id);
       if (!box || box.dataset.farmaObserved === '1') return;
       box.dataset.farmaObserved = '1';
-      new MutationObserver(() => setTimeout(addUnclassifiedOptions, 0)).observe(box, { childList: true });
+      new MutationObserver(() => setTimeout(() => {
+        addUnclassifiedOptions();
+        ensureAmpouleOption();
+      }, 0)).observe(box, { childList: true });
     });
   }
 
@@ -298,6 +324,7 @@
     if (!document.getElementById('filterShapeBox') || !window._productsCache) return;
 
     initialized = true;
+    ensureAmpouleOption();
     addSortControl();
     addExtraFilterDetails();
     addUnclassifiedOptions();
@@ -322,6 +349,7 @@
       new MutationObserver(() => {
         if (rendering) return;
         refreshExtraFiltersIfNeeded();
+        ensureAmpouleOption();
         updateHeaderCount((window._productsCache || []).length);
         updateExtraCounts();
       }).observe(tableWrap, { childList: true, subtree: true });
@@ -330,12 +358,14 @@
     setTimeout(() => {
       refreshExtraFiltersIfNeeded();
       addUnclassifiedOptions();
+      ensureAmpouleOption();
       rerender();
     }, 50);
   }
 
   const timer = setInterval(() => {
     try {
+      ensureAmpouleOption();
       boot();
       if (initialized) clearInterval(timer);
     } catch (err) {
