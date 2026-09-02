@@ -182,3 +182,77 @@ function setupFarmaSidebar() {
 }
 
 document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
+
+// ============================================================
+// إصلاح فلترة المبيعات حسب تاريخ القاهرة
+// ============================================================
+// Supabase يخزن created_at كـ timestamptz. فلتر "اليوم" كان يعتمد
+// على timezone الجهاز، فلو الجهاز على UTC كانت مبيعات 00:00–02:59
+// بتوقيت القاهرة تظهر ضمن اليوم السابق/لا تظهر في "اليوم".
+// هذا override يجعل بداية اليوم/الأسبوع/الشهر محسوبة بتوقيت القاهرة.
+(function installCairoSalesDateFix() {
+  const isSalesPage = /(^|\/)sales\.html$/i.test(window.location.pathname);
+  if (!isSalesPage) return;
+
+  const cairoParts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(new Date());
+
+  const getPart = type => {
+    const part = cairoParts.find(p => p.type === type);
+    return part ? part.value : '';
+  };
+
+  const cairoToday = {
+    year: Number(getPart('year')),
+    month: Number(getPart('month')),
+    day: Number(getPart('day'))
+  };
+
+  const cairoStartIso = (year, month, day) => {
+    // Egypt is UTC+03:00 during the current summer period.
+    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
+  };
+
+  const shiftCairoDate = (year, month, day, deltaDays) => {
+    const d = new Date(Date.UTC(year, month - 1, day));
+    d.setUTCDate(d.getUTCDate() + deltaDays);
+    return {
+      year: d.getUTCFullYear(),
+      month: d.getUTCMonth() + 1,
+      day: d.getUTCDate()
+    };
+  };
+
+  const originalGetRangeStart = window.getRangeStart;
+
+  setTimeout(() => {
+    window.getRangeStart = function(range) {
+      if (range === 'today') {
+        return cairoStartIso(cairoToday.year, cairoToday.month, cairoToday.day);
+      }
+
+      if (range === 'week') {
+        const start = shiftCairoDate(cairoToday.year, cairoToday.month, cairoToday.day, -7);
+        return cairoStartIso(start.year, start.month, start.day);
+      }
+
+      if (range === 'month') {
+        const start = new Date(Date.UTC(cairoToday.year, cairoToday.month - 1, cairoToday.day));
+        start.setUTCMonth(start.getUTCMonth() - 1);
+        return cairoStartIso(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate());
+      }
+
+      return typeof originalGetRangeStart === 'function'
+        ? originalGetRangeStart(range)
+        : null;
+    };
+
+    if (typeof window.loadRecentSales === 'function') {
+      window.loadRecentSales();
+    }
+  }, 0);
+})();
