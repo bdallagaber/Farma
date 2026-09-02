@@ -1,10 +1,13 @@
-/* Farma - Daftra-style sidebar */
+/* ============================================================
+   Farma - Daftra-style Sidebar
+   ============================================================ */
 
 :root {
   --farma-sidebar-width: 270px;
   --farma-sidebar-collapsed: 78px;
 }
 
+/* ---------------- Desktop layout ---------------- */
 body.farma-sidebar-ready {
   padding: 16px;
   padding-right: calc(var(--farma-sidebar-width) + 32px);
@@ -36,8 +39,15 @@ body.farma-sidebar-ready > nav {
   transition: width .22s ease, right .22s ease;
 }
 
+body.farma-sidebar-ready > nav::-webkit-scrollbar { width: 5px; }
+body.farma-sidebar-ready > nav::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+}
+
 body.farma-sidebar-ready > nav::before { display: none; }
 
+/* ---------------- Brand ---------------- */
 .farma-sidebar-brand {
   display: flex;
   align-items: center;
@@ -78,6 +88,7 @@ body.farma-sidebar-ready > nav::before { display: none; }
   font-weight: 600;
 }
 
+/* ---------------- Collapse button ---------------- */
 .farma-nav-collapse {
   position: absolute;
   top: 17px;
@@ -95,8 +106,12 @@ body.farma-sidebar-ready > nav::before { display: none; }
   line-height: 1;
 }
 
-.farma-nav-collapse:hover { background: var(--primary-light); color: var(--primary-dark); }
+.farma-nav-collapse:hover {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
 
+/* ---------------- Groups ---------------- */
 .farma-nav-group { margin: 2px 0; }
 
 .farma-nav-group-toggle {
@@ -116,10 +131,29 @@ body.farma-sidebar-ready > nav::before { display: none; }
   text-align: right;
 }
 
-.farma-nav-group-toggle:hover { background: var(--bg); color: var(--text); }
+.farma-nav-group-toggle:hover {
+  background: var(--bg);
+  color: var(--text);
+}
 
-.farma-nav-group-title { display: flex; align-items: center; gap: 9px; }
-.farma-nav-group-title > span:first-child { width: 21px; text-align: center; font-size: 16px; }
+.farma-nav-group-toggle:focus-visible,
+.farma-nav-collapse:focus-visible,
+body.farma-sidebar-ready nav a:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.farma-nav-group-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.farma-nav-group-title > span:first-child {
+  width: 21px;
+  text-align: center;
+  font-size: 16px;
+}
 
 .farma-nav-chevron {
   color: var(--text-muted);
@@ -137,8 +171,14 @@ body.farma-sidebar-ready > nav::before { display: none; }
 }
 
 .farma-nav-group.open .farma-nav-sub { grid-template-rows: 1fr; }
-.farma-nav-sub-inner { min-height: 0; overflow: hidden; padding-right: 8px; }
 
+.farma-nav-sub-inner {
+  min-height: 0;
+  overflow: hidden;
+  padding-right: 8px;
+}
+
+/* ---------------- Links ---------------- */
 body.farma-sidebar-ready nav a {
   margin: 2px 0;
   padding: 9px 11px;
@@ -152,28 +192,74 @@ body.farma-sidebar-ready nav a {
   font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
-  transition: background .15s ease, color .15s ease;
+  transition: background .15s ease, color .15s ease, transform .1s ease;
 }
 
-body.farma-sidebar-ready nav a > span:first-child { width: 21px; flex: 0 0 21px; text-align: center; font-size: 15px; }
-body.farma-sidebar-ready nav a:hover { background: var(--primary-light); color: var(--primary-dark); }
-body.farma-sidebar-ready nav a.active { background: var(--primary); color: #fff; font-weight: 750; }
+body.farma-sidebar-ready nav a > span:first-child {
+  width: 21px;
+  flex: 0 0 21px;
+  text-align: center;
+  font-size: 15px;
+}
 
-/* Collapsed desktop rail */
-body.farma-sidebar-collapsed { padding-right: calc(var(--farma-sidebar-collapsed) + 28px); }
+body.farma-sidebar-ready nav a:hover {
+  background: var(--primary-light);
+  color: var(--primary-dark);
+}
+
+body.farma-sidebar-ready nav a:active { transform: scale(.99); }
+
+body.farma-sidebar-ready nav a.active {
+  background: var(--primary);
+  color: #fff;
+  font-weight: 750;
+}
+
+/* ---------------- Collapsed desktop rail ---------------- */
+body.farma-sidebar-collapsed {
+  padding-right: calc(var(--farma-sidebar-collapsed) + 28px);
+}
+
 body.farma-sidebar-collapsed > nav { width: var(--farma-sidebar-collapsed); }
-body.farma-sidebar-collapsed .farma-sidebar-brand { justify-content: center; padding-left: 0; padding-right: 0; }
+
+body.farma-sidebar-collapsed .farma-sidebar-brand {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
 body.farma-sidebar-collapsed .farma-sidebar-brand-text,
 body.farma-sidebar-collapsed .farma-nav-group-title > span:last-child,
 body.farma-sidebar-collapsed .farma-nav-chevron,
 body.farma-sidebar-collapsed .farma-nav-sub,
-body.farma-sidebar-collapsed nav > a > span:last-child { display: none; }
-body.farma-sidebar-collapsed .farma-sidebar-brand-logo { width: 38px; }
-body.farma-sidebar-collapsed .farma-nav-collapse { left: 50%; transform: translateX(-50%); top: 58px; }
-body.farma-sidebar-collapsed .farma-nav-group-toggle { justify-content: center; padding: 9px; }
-body.farma-sidebar-collapsed nav > a { justify-content: center; padding: 9px; }
-body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child { width: auto; font-size: 17px; }
+body.farma-sidebar-collapsed nav > a > span:last-child {
+  display: none;
+}
 
+body.farma-sidebar-collapsed .farma-sidebar-brand-logo { width: 38px; }
+
+body.farma-sidebar-collapsed .farma-nav-collapse {
+  left: 50%;
+  transform: translateX(-50%);
+  top: 58px;
+}
+
+body.farma-sidebar-collapsed .farma-nav-group-toggle {
+  justify-content: center;
+  padding: 9px;
+}
+
+body.farma-sidebar-collapsed nav > a {
+  justify-content: center;
+  padding: 9px;
+}
+
+body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child {
+  width: auto;
+  font-size: 17px;
+}
+
+/* ---------------- Mobile drawer ---------------- */
 @media (max-width: 899px) {
   body.farma-sidebar-ready,
   body.farma-sidebar-collapsed {
@@ -182,7 +268,8 @@ body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child { width: 
     margin: 0 auto;
   }
 
-  body.farma-sidebar-ready > nav {
+  body.farma-sidebar-ready > nav,
+  body.farma-sidebar-collapsed > nav {
     top: 0;
     right: 0;
     bottom: 0;
@@ -196,21 +283,64 @@ body.farma-sidebar-collapsed .farma-nav-group-title > span:first-child { width: 
     transition: transform .22s ease;
   }
 
-  body.farma-sidebar-ready > nav.open { transform: translateX(0); }
-  body.farma-sidebar-collapsed > nav { width: min(86vw, 310px); }
-  body.farma-sidebar-collapsed > nav .farma-sidebar-brand-text,
-  body.farma-sidebar-collapsed > nav .farma-nav-group-title > span:last-child,
-  body.farma-sidebar-collapsed > nav .farma-nav-chevron,
-  body.farma-sidebar-collapsed > nav .farma-nav-sub,
-  body.farma-sidebar-collapsed > nav > a > span:last-child { display: initial; }
-  body.farma-sidebar-collapsed > nav .farma-sidebar-brand { justify-content: flex-start; }
-  body.farma-sidebar-collapsed > nav .farma-nav-collapse { left: 10px; transform: none; top: 17px; }
+  body.farma-sidebar-ready > nav.open,
+  body.farma-sidebar-collapsed > nav.open {
+    transform: translateX(0);
+  }
+
+  /* Collapsed state is a desktop-only concept. */
+  body.farma-sidebar-collapsed {
+    padding-right: 10px;
+  }
+
+  body.farma-sidebar-collapsed .farma-sidebar-brand {
+    justify-content: flex-start;
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  body.farma-sidebar-collapsed .farma-sidebar-brand-text,
+  body.farma-sidebar-collapsed .farma-nav-group-title > span:last-child,
+  body.farma-sidebar-collapsed .farma-nav-chevron,
+  body.farma-sidebar-collapsed .farma-nav-sub,
+  body.farma-sidebar-collapsed nav > a > span:last-child {
+    display: initial;
+  }
+
+  body.farma-sidebar-collapsed .farma-nav-collapse {
+    left: 10px;
+    transform: none;
+    top: 17px;
+  }
+
+  body.farma-sidebar-collapsed .farma-nav-group-toggle {
+    justify-content: space-between;
+    padding: 9px 11px;
+  }
+
+  body.farma-sidebar-collapsed nav > a {
+    justify-content: flex-start;
+    padding: 9px 11px;
+  }
 
   body.farma-sidebar-ready header { margin-bottom: 10px; }
-  body.farma-sidebar-ready #menuToggle { display: inline-grid; place-items: center; min-width: 42px; min-height: 40px; }
+
+  body.farma-sidebar-ready #menuToggle {
+    display: inline-grid;
+    place-items: center;
+    min-width: 42px;
+    min-height: 40px;
+  }
+
+  .farma-nav-group-toggle { min-height: 46px; }
+  body.farma-sidebar-ready nav a { min-height: 42px; }
 }
 
 @media (min-width: 900px) {
-  body.farma-sidebar-ready > .main-content { width: 100%; min-width: 0; }
+  body.farma-sidebar-ready > .main-content {
+    width: 100%;
+    min-width: 0;
+  }
+
   body.farma-sidebar-ready header { width: 100%; }
 }
