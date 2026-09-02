@@ -8,6 +8,136 @@
 <script src="zxing-lib.js"></script>
 <script src="xlsx-lib.js"></script>
 <link rel="stylesheet" href="style.css">
+<style>
+/* تحسين سلة المبيعات على شاشات الموبايل */
+#cartWrap {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+#cartWrap table {
+  width: 100%;
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+#cartWrap th,
+#cartWrap td {
+  vertical-align: middle;
+}
+
+#cartWrap th:first-child,
+#cartWrap td:first-child {
+  width: 34%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+#cartWrap th:nth-child(2),
+#cartWrap td:nth-child(2) {
+  width: 38%;
+}
+
+#cartWrap th:nth-child(3),
+#cartWrap td:nth-child(3) {
+  width: 78px;
+}
+
+#cartWrap th:last-child,
+#cartWrap td:last-child {
+  width: 54px;
+  min-width: 54px;
+  max-width: 54px;
+  padding-left: 3px;
+  padding-right: 3px;
+  text-align: center;
+}
+
+#cartWrap td:last-child button {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  width: 48px !important;
+  min-width: 48px !important;
+  max-width: 48px !important;
+  padding: 7px 3px !important;
+  margin: 0 !important;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+#cartWrap td:nth-child(2) > div {
+  display: flex !important;
+  align-items: center;
+  gap: 4px !important;
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+
+#cartWrap td:nth-child(2) input[type="number"] {
+  width: 48px !important;
+  min-width: 48px;
+  max-width: 48px;
+  padding: 5px !important;
+  font-size: 12px !important;
+}
+
+#cartWrap td:nth-child(2) select {
+  width: auto !important;
+  min-width: 70px;
+  max-width: 100%;
+  padding: 5px !important;
+  font-size: 12px !important;
+}
+
+#cartWrap td:nth-child(3) input[type="number"] {
+  width: 64px !important;
+  min-width: 64px;
+  max-width: 100%;
+  padding: 5px !important;
+  font-size: 12px !important;
+}
+
+@media (max-width: 600px) {
+  #cartWrap {
+    overflow-x: hidden;
+  }
+
+  #cartWrap table {
+    font-size: 12px;
+  }
+
+  #cartWrap th,
+  #cartWrap td {
+    padding: 6px 3px;
+  }
+
+  #cartWrap th:first-child,
+  #cartWrap td:first-child {
+    width: 30%;
+  }
+
+  #cartWrap th:nth-child(2),
+  #cartWrap td:nth-child(2) {
+    width: 37%;
+  }
+
+  #cartWrap th:nth-child(3),
+  #cartWrap td:nth-child(3) {
+    width: 70px;
+  }
+
+  #cartWrap th:last-child,
+  #cartWrap td:last-child {
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
+    padding: 5px 2px;
+  }
+}
+</style>
 </head>
 <body class="has-sidebar">
 
