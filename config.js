@@ -2,7 +2,7 @@
 // إعدادات الاتصال بـ Supabase - ملف مشترك تستخدمه كل صفحات السيستم
 // ============================================================
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhucHB1enVsbGZ5eGVxd3hoeXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTkyNzEsImV4cCI6MjEwMTUzNTI3MX0.kWCN1qai3IcbkiD30Ng-SmyqJGqTl6BHskNrcDJnEU8";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -23,9 +23,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   document.head.appendChild(style);
 })();
 
-async function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
+async function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
 let farmaRedirectingToLogin = false;
 let farmaLastKnownSession = null;
@@ -58,53 +56,33 @@ function hasPersistedFarmaSession() {
     if (!raw) return false;
     const stored = JSON.parse(raw);
     return Boolean(stored?.access_token || stored?.refresh_token || stored?.session?.access_token || stored?.session?.refresh_token);
-  } catch (err) {
-    return false;
-  }
+  } catch (err) { return false; }
 }
 
 async function getStableProfile(userId) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
-      const { data, error } = await sb
-        .from('profiles')
-        .select('role, full_name, allowed_pages')
-        .eq('id', userId)
-        .single();
-
+      const { data, error } = await sb.from('profiles').select('role, full_name, allowed_pages').eq('id', userId).single();
       if (!error && data) {
         farmaLastKnownProfile = data;
-        try {
-          localStorage.setItem('farma-profile-cache', JSON.stringify(data));
-        } catch (cacheErr) {
-          console.warn('Could not cache profile:', cacheErr);
-        }
+        try { localStorage.setItem('farma-profile-cache', JSON.stringify(data)); } catch (_) {}
         return data;
       }
       console.warn('Profile lookup attempt failed:', error);
-    } catch (err) {
-      console.warn('Profile lookup exception:', err);
-    }
-
+    } catch (err) { console.warn('Profile lookup exception:', err); }
     if (attempt < 2) await sleep(350 * (attempt + 1));
   }
   return null;
 }
 
 async function requireAuth() {
-  // أثناء انتقال المستخدم بين صفحات HTML مختلفة قد يحتاج Supabase لحظات
-  // لقراءة/تحديث الجلسة المشتركة من localStorage. لا نعتبر القراءة الأولى
-  // الفارغة Logout حقيقيًا، حتى لا نطرد المستخدم أثناء التنقل.
   for (let attempt = 0; attempt < 6; attempt++) {
     const session = await getStableSession();
     if (session) return requireAuthWithSession(session);
-
     const persisted = hasPersistedFarmaSession();
     if (!persisted && attempt >= 2) break;
-
     await sleep(500);
   }
-
   if (!farmaRedirectingToLogin) {
     farmaRedirectingToLogin = true;
     window.location.replace('index.html');
@@ -114,22 +92,9 @@ async function requireAuth() {
 
 async function requireAuthWithSession(session) {
   const profile = await getStableProfile(session.user.id);
-
   if (profile) return { user: session.user, profile };
-
-  if (farmaLastKnownProfile) {
-    console.warn('Profile temporarily unavailable; using last verified profile.');
-    return { user: session.user, profile: farmaLastKnownProfile };
-  }
-
-  return {
-    user: session.user,
-    profile: {
-      role: 'employee',
-      full_name: session.user.email || 'مستخدم',
-      allowed_pages: []
-    }
-  };
+  if (farmaLastKnownProfile) return { user: session.user, profile: farmaLastKnownProfile };
+  return { user: session.user, profile: { role: 'employee', full_name: session.user.email || 'مستخدم', allowed_pages: [] } };
 }
 
 sb.auth.onAuthStateChange((event, session) => {
@@ -139,23 +104,13 @@ sb.auth.onAuthStateChange((event, session) => {
 
 function guardPageAccess(profile, pageKey) {
   if (profile.role === 'admin') return true;
-
   const allowed = profile.allowed_pages || [];
-
   document.querySelectorAll('nav a[href$=".html"]').forEach(a => {
     const key = a.getAttribute('href').replace('.html', '');
-    if (key === 'users') {
-      a.style.display = 'none';
-    } else if (!allowed.includes(key)) {
-      a.style.display = 'none';
-    }
+    if (key === 'users' || !allowed.includes(key)) a.style.display = 'none';
   });
-
   if (!allowed.includes(pageKey)) {
-    document.body.innerHTML =
-      '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#6b7684;">' +
-      'مفيش صلاحية لدخول القسم ده. <a href="' + (allowed[0] || 'index') + '.html" style="color:#0d9488;">ارجع للصفحة المسموحة</a>' +
-      '</div>';
+    document.body.innerHTML = '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#6b7684;">مفيش صلاحية لدخول القسم ده. <a href="' + (allowed[0] || 'index') + '.html" style="color:#0d9488;">ارجع للصفحة المسموحة</a></div>';
     return false;
   }
   return true;
@@ -163,163 +118,93 @@ function guardPageAccess(profile, pageKey) {
 
 let farmaSidebarCssPromise = null;
 (function loadSidebarStyles() {
-  if (document.getElementById('farmaSidebarCss')) {
-    farmaSidebarCssPromise = Promise.resolve();
-    return;
-  }
-
+  if (document.getElementById('farmaSidebarCss')) { farmaSidebarCssPromise = Promise.resolve(); return; }
   const link = document.createElement('link');
   link.id = 'farmaSidebarCss';
   link.rel = 'stylesheet';
   link.href = 'sidebar.css?v=5';
-
   farmaSidebarCssPromise = new Promise(resolve => {
     link.onload = resolve;
-    link.onerror = () => {
-      console.warn('Sidebar CSS failed to load; continuing with fallback styles.');
-      resolve();
-    };
+    link.onerror = () => { console.warn('Sidebar CSS failed to load; continuing with fallback styles.'); resolve(); };
   });
-
   document.head.appendChild(link);
 })();
 
 async function setupFarmaSidebar() {
-  // لا نضيف farma-sidebar-ready إلا بعد تحميل sidebar.css فعليًا.
   await farmaSidebarCssPromise;
-
   const sidebar = document.querySelector('nav');
   if (!sidebar) return;
-
   const links = Array.from(sidebar.querySelectorAll('a[href$=".html"]'));
-  if (!links.length || sidebar.dataset.farmaBuilt === '1') {
-    document.body.classList.add('farma-sidebar-ready');
-    return;
-  }
-
+  if (!links.length || sidebar.dataset.farmaBuilt === '1') { document.body.classList.add('farma-sidebar-ready'); return; }
   sidebar.dataset.farmaBuilt = '1';
-
   const currentFile = (location.pathname.split('/').pop() || 'inventory.html').toLowerCase();
   const byHref = {};
   links.forEach(a => { byHref[a.getAttribute('href')] = a; });
-
   sidebar.innerHTML = '';
-
   const brand = document.createElement('div');
   brand.className = 'farma-sidebar-brand';
   brand.innerHTML = '<div class="farma-sidebar-brand-logo">F</div><div class="farma-sidebar-brand-text">Farma<small>إدارة الصيدلية</small></div>';
   sidebar.appendChild(brand);
-
   const collapse = document.createElement('button');
-  collapse.type = 'button';
-  collapse.className = 'farma-nav-collapse';
-  collapse.title = 'تصغير القائمة';
-  collapse.textContent = '‹';
+  collapse.type = 'button'; collapse.className = 'farma-nav-collapse'; collapse.title = 'تصغير القائمة'; collapse.textContent = '‹';
   sidebar.appendChild(collapse);
-
   const groups = [
     { title: 'المخزون', icon: '📦', hrefs: ['inventory.html', 'shortages.html'] },
     { title: 'المبيعات', icon: '🛒', hrefs: ['sales.html', 'invoices.html'] }
   ];
-
   function addGroup(group) {
     const existing = group.hrefs.map(h => byHref[h]).filter(Boolean);
     if (!existing.length) return;
-
-    const wrapper = document.createElement('div');
-    wrapper.className = 'farma-nav-group';
-
-    const toggle = document.createElement('button');
-    toggle.type = 'button';
-    toggle.className = 'farma-nav-group-toggle';
+    const wrapper = document.createElement('div'); wrapper.className = 'farma-nav-group';
+    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'farma-nav-group-toggle';
     toggle.innerHTML = '<span class="farma-nav-group-title"><span>' + group.icon + '</span><span>' + group.title + '</span></span><span class="farma-nav-chevron">›</span>';
-
-    const sub = document.createElement('div');
-    sub.className = 'farma-nav-sub';
-    const inner = document.createElement('div');
-    inner.className = 'farma-nav-sub-inner';
-
+    const sub = document.createElement('div'); sub.className = 'farma-nav-sub';
+    const inner = document.createElement('div'); inner.className = 'farma-nav-sub-inner';
     let hasCurrent = false;
     existing.forEach(a => {
-      const href = a.getAttribute('href');
-      const label = a.textContent.trim();
+      const href = a.getAttribute('href'); const label = a.textContent.trim();
       const icon = href === 'inventory.html' ? '📋' : href === 'shortages.html' ? '⚠️' : href === 'sales.html' ? '🧾' : '📑';
       a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>';
-      if (href.toLowerCase() === currentFile || a.classList.contains('active')) {
-        a.classList.add('active');
-        hasCurrent = true;
-      }
+      if (href.toLowerCase() === currentFile || a.classList.contains('active')) { a.classList.add('active'); hasCurrent = true; }
       inner.appendChild(a);
     });
-
-    sub.appendChild(inner);
-    wrapper.appendChild(toggle);
-    wrapper.appendChild(sub);
-    sidebar.appendChild(wrapper);
-
+    sub.appendChild(inner); wrapper.appendChild(toggle); wrapper.appendChild(sub); sidebar.appendChild(wrapper);
     if (hasCurrent) wrapper.classList.add('open');
     toggle.addEventListener('click', () => wrapper.classList.toggle('open'));
   }
-
   groups.forEach(addGroup);
-
-  const singles = [
-    ['expenses.html', '💳', 'المصروفات'],
-    ['profit.html', '📊', 'الأرباح والتقارير'],
-    ['search.html', '🔎', 'البحث عن دواء'],
-    ['users.html', '👥', 'المستخدمون']
-  ];
-
+  const singles = [['expenses.html', '💳', 'المصروفات'], ['profit.html', '📊', 'الأرباح والتقارير'], ['search.html', '🔎', 'البحث عن دواء'], ['users.html', '👥', 'المستخدمون']];
   singles.forEach(([href, icon, fallbackLabel]) => {
-    const a = byHref[href];
-    if (!a) return;
+    const a = byHref[href]; if (!a) return;
     const label = href === 'users.html' ? fallbackLabel : (a.textContent.trim() || fallbackLabel);
     a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>';
     if (href.toLowerCase() === currentFile || a.classList.contains('active')) a.classList.add('active');
     sidebar.appendChild(a);
   });
-
   function setCollapsed(collapsed) {
     document.body.classList.toggle('farma-sidebar-collapsed', collapsed);
     collapse.textContent = collapsed ? '›' : '‹';
     collapse.title = collapsed ? 'توسيع القائمة' : 'تصغير القائمة';
     localStorage.setItem('farmaSidebarCollapsed', collapsed ? '1' : '0');
   }
-
-  const saved = localStorage.getItem('farmaSidebarCollapsed') === '1';
-  setCollapsed(saved);
-  collapse.addEventListener('click', () => {
-    setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed'));
-  });
-
+  setCollapsed(localStorage.getItem('farmaSidebarCollapsed') === '1');
+  collapse.addEventListener('click', () => setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed')));
   const overlay = document.getElementById('sidebarOverlay');
   const toggleMobile = document.getElementById('menuToggle');
   if (overlay && toggleMobile) {
-    const closeMobile = () => {
-      sidebar.classList.remove('open');
-      overlay.classList.remove('open');
-      document.body.classList.remove('nav-locked');
-    };
-    toggleMobile.addEventListener('click', () => {
-      sidebar.classList.toggle('open');
-      overlay.classList.toggle('open');
-      document.body.classList.toggle('nav-locked', sidebar.classList.contains('open'));
-    });
+    const closeMobile = () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); document.body.classList.remove('nav-locked'); };
+    toggleMobile.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); document.body.classList.toggle('nav-locked', sidebar.classList.contains('open')); });
     overlay.addEventListener('click', closeMobile);
     sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
   }
-
-  // مهم جدًا: لا نظهر الصفحة قبل اكتمال بناء الـ sidebar بالكامل.
   document.body.classList.add('farma-sidebar-ready');
 }
 
 document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
 
 (function loadInventoryEnhancements() {
-  const isInventoryPage = /(^|\/)inventory\.html$/i.test(window.location.pathname);
-  if (!isInventoryPage) return;
+  if (!/(^|\/)inventory\.html$/i.test(window.location.pathname)) return;
   if (document.getElementById('farmaInventoryEnhancements')) return;
-
   const script = document.createElement('script');
   script.id = 'farmaInventoryEnhancements';
   script.src = 'inventory-enhancements.js?v=1';
@@ -327,47 +212,20 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
 })();
 
 (function installCairoSalesDateFix() {
-  const isSalesPage = /(^|\/)sales\.html$/i.test(window.location.pathname);
-  if (!isSalesPage) return;
-
-  const cairoParts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit'
-  }).formatToParts(new Date());
-
-  const getPart = type => {
-    const part = cairoParts.find(p => p.type === type);
-    return part ? part.value : '';
-  };
-
+  if (!/(^|\/)sales\.html$/i.test(window.location.pathname)) return;
+  const cairoParts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date());
+  const getPart = type => cairoParts.find(p => p.type === type)?.value || '';
   const cairoToday = { year: Number(getPart('year')), month: Number(getPart('month')), day: Number(getPart('day')) };
-
-  const cairoStartIso = (year, month, day) => {
-    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
-  };
-
-  const shiftCairoDate = (year, month, day, deltaDays) => {
-    const d = new Date(Date.UTC(year, month - 1, day));
-    d.setUTCDate(d.getUTCDate() + deltaDays);
-    return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
-  };
-
+  const cairoStartIso = (year, month, day) => new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
+  const shiftCairoDate = (year, month, day, deltaDays) => { const d = new Date(Date.UTC(year, month - 1, day)); d.setUTCDate(d.getUTCDate() + deltaDays); return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() }; };
   const originalGetRangeStart = window.getRangeStart;
-
   setTimeout(() => {
     window.getRangeStart = function(range) {
       if (range === 'today') return cairoStartIso(cairoToday.year, cairoToday.month, cairoToday.day);
-      if (range === 'week') {
-        const start = shiftCairoDate(cairoToday.year, cairoToday.month, cairoToday.day, -7);
-        return cairoStartIso(start.year, start.month, start.day);
-      }
-      if (range === 'month') {
-        const start = new Date(Date.UTC(cairoToday.year, cairoToday.month - 1, cairoToday.day));
-        start.setUTCMonth(start.getUTCMonth() - 1);
-        return cairoStartIso(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate());
-      }
+      if (range === 'week') { const start = shiftCairoDate(cairoToday.year, cairoToday.month, cairoToday.day, -7); return cairoStartIso(start.year, start.month, start.day); }
+      if (range === 'month') { const start = new Date(Date.UTC(cairoToday.year, cairoToday.month - 1, cairoToday.day)); start.setUTCMonth(start.getUTCMonth() - 1); return cairoStartIso(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate()); }
       return typeof originalGetRangeStart === 'function' ? originalGetRangeStart(range) : null;
     };
-
     if (typeof window.loadRecentSales === 'function') window.loadRecentSales();
   }, 0);
 })();
