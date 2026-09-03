@@ -52,6 +52,17 @@ async function getStableSession() {
   return null;
 }
 
+function hasPersistedFarmaSession() {
+  try {
+    const raw = localStorage.getItem('farma-auth');
+    if (!raw) return false;
+    const stored = JSON.parse(raw);
+    return Boolean(stored?.access_token || stored?.refresh_token || stored?.session?.access_token || stored?.session?.refresh_token);
+  } catch (err) {
+    return false;
+  }
+}
+
 async function getStableProfile(userId) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
@@ -81,25 +92,24 @@ async function getStableProfile(userId) {
 }
 
 async function requireAuth() {
-  let session = await getStableSession();
+  // أثناء انتقال المستخدم بين صفحات HTML مختلفة قد يحتاج Supabase لحظات
+  // لقراءة/تحديث الجلسة المشتركة من localStorage. لا نعتبر القراءة الأولى
+  // الفارغة Logout حقيقيًا، حتى لا نطرد المستخدم أثناء التنقل.
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const session = await getStableSession();
+    if (session) return requireAuthWithSession(session);
 
-  if (!session) {
+    const persisted = hasPersistedFarmaSession();
+    if (!persisted && attempt >= 2) break;
+
     await sleep(500);
-    session = await getStableSession();
   }
 
-  if (!session) {
-    if (!farmaRedirectingToLogin) {
-      farmaRedirectingToLogin = true;
-      window.location.replace('index.html');
-    }
-    return null;
+  if (!farmaRedirectingToLogin) {
+    farmaRedirectingToLogin = true;
+    window.location.replace('index.html');
   }
-
-  // لا نستدعي refreshSession() يدويًا هنا.
-  // Supabase autoRefreshToken يتولى التجديد في الخلفية، وتجنّب refresh
-  // في كل صفحة يمنع سباق refresh-token عند التنقل السريع بين الصفحات.
-  return requireAuthWithSession(session);
+  return null;
 }
 
 async function requireAuthWithSession(session) {
@@ -151,16 +161,33 @@ function guardPageAccess(profile, pageKey) {
   return true;
 }
 
+let farmaSidebarCssPromise = null;
 (function loadSidebarStyles() {
-  if (document.getElementById('farmaSidebarCss')) return;
+  if (document.getElementById('farmaSidebarCss')) {
+    farmaSidebarCssPromise = Promise.resolve();
+    return;
+  }
+
   const link = document.createElement('link');
   link.id = 'farmaSidebarCss';
   link.rel = 'stylesheet';
-  link.href = 'sidebar.css?v=4';
+  link.href = 'sidebar.css?v=5';
+
+  farmaSidebarCssPromise = new Promise(resolve => {
+    link.onload = resolve;
+    link.onerror = () => {
+      console.warn('Sidebar CSS failed to load; continuing with fallback styles.');
+      resolve();
+    };
+  });
+
   document.head.appendChild(link);
 })();
 
-function setupFarmaSidebar() {
+async function setupFarmaSidebar() {
+  // لا نضيف farma-sidebar-ready إلا بعد تحميل sidebar.css فعليًا.
+  await farmaSidebarCssPromise;
+
   const sidebar = document.querySelector('nav');
   if (!sidebar) return;
 
