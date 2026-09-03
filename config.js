@@ -16,6 +16,8 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 });
 
+// اخفاء الصفحة ذات الـSidebar قبل أن تكتمل كل ملفات الـSidebar.
+// هذا يمنع ظهور الـnav القديم ولو لجزء من الثانية أثناء الانتقال بين الصفحات.
 (function installSidebarPreloadGuard() {
   if (document.getElementById('farmaSidebarPreloadGuard')) return;
   const style = document.createElement('style');
@@ -61,7 +63,6 @@ async function refreshSessionSafely(session) {
   const remaining = expiresAt ? expiresAt - Date.now() : 0;
   if (remaining > 10 * 60 * 1000) return session;
 
-  // Cross-page lock: يمنع الصفحة القديمة والجديدة من refresh نفس token في نفس اللحظة.
   const lockKey = 'farma-auth-refresh-lock';
   const now = Date.now();
   try {
@@ -104,8 +105,6 @@ async function waitForStableSession() {
   return null;
 }
 
-// Keep the current page authenticated for long-running pharmacy sessions.
-// This runs only on the currently open page and refreshes only when needed.
 function startFarmaSessionKeepAlive() {
   if (window.__farmaKeepAliveStarted) return;
   window.__farmaKeepAliveStarted = true;
@@ -211,16 +210,26 @@ function guardPageAccess(profile, pageKey) {
   return true;
 }
 
+// ننتظر تحميل sidebar.css فعليًا قبل إزالة حالة الإخفاء.
+// السبب: إضافة class الجاهزية قبل انتهاء تحميل CSS كانت تسمح للـnav القديم
+// في style.css أن يظهر للحظة قبل تطبيق تصميم الـSidebar الجديد.
+let farmaSidebarCssReady = Promise.resolve();
 (function loadSidebarStyles() {
   if (document.getElementById('farmaSidebarCss')) return;
-  const link = document.createElement('link');
-  link.id = 'farmaSidebarCss';
-  link.rel = 'stylesheet';
-  link.href = 'sidebar.css?v=5';
-  document.head.appendChild(link);
+  farmaSidebarCssReady = new Promise(resolve => {
+    const link = document.createElement('link');
+    link.id = 'farmaSidebarCss';
+    link.rel = 'stylesheet';
+    link.href = 'sidebar.css?v=6';
+    link.onload = () => resolve();
+    link.onerror = () => resolve();
+    document.head.appendChild(link);
+  });
 })();
 
-function setupFarmaSidebar() {
+async function setupFarmaSidebar() {
+  await farmaSidebarCssReady;
+
   const sidebar = document.querySelector('nav');
   if (!sidebar) {
     document.body.classList.add('farma-sidebar-ready');
@@ -337,6 +346,7 @@ function setupFarmaSidebar() {
     sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
   }
 
+  // مهم جدًا: لا نكشف الصفحة إلا بعد اكتمال بناء الـSidebar وتطبيق CSS الخاص به.
   document.body.classList.add('farma-sidebar-ready');
 }
 
