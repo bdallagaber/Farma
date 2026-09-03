@@ -181,6 +181,11 @@ async function setupFarmaSidebar() {
     if (href.toLowerCase() === currentFile || a.classList.contains('active')) a.classList.add('active');
     sidebar.appendChild(a);
   });
+  const versionLink = document.createElement('a');
+  versionLink.href = 'versions.html';
+  versionLink.innerHTML = '<span>🕘</span><span>إصدارات النظام</span>';
+  if (currentFile === 'versions.html') versionLink.classList.add('active');
+  sidebar.appendChild(versionLink);
   function setCollapsed(collapsed) {
     document.body.classList.toggle('farma-sidebar-collapsed', collapsed);
     collapse.textContent = collapsed ? '›' : '‹';
