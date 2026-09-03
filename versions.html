@@ -7,122 +7,26 @@
 <script src="supabase-lib.js"></script>
 <link rel="stylesheet" href="style.css">
 <style>
-  .versions-page{max-width:1100px;margin:0 auto}
-  .version-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
-  .version-head h2{margin:0;color:var(--primary-dark)}
-  .version-status{font-size:13px;color:var(--text-muted)}
-  .version-card{border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  .version-main{min-width:0;flex:1}
-  .version-title{font-weight:700;color:var(--text);margin-bottom:6px;word-break:break-word}
-  .version-meta{font-size:12px;color:var(--text-muted);line-height:1.8}
-  .version-sha{font-family:monospace;direction:ltr;display:inline-block}
-  .version-actions{display:flex;gap:8px;flex-wrap:wrap}
-  .version-actions button{margin:0;min-width:105px}
-  .danger-btn{background:#b42318!important;color:#fff!important;border-color:#b42318!important}
-  .muted-btn{background:#f6f8fa!important;color:#344054!important;border:1px solid var(--border)!important}
-  .diff-box{display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.55 monospace;max-height:420px;overflow:auto;background:#f8fafc;padding:12px;border-radius:8px}
-  .empty-state{text-align:center;padding:35px;color:var(--text-muted)}
-  .notice{padding:12px 14px;border-radius:8px;background:#fff8e6;border:1px solid #f1d58a;color:#6b4f00;margin-bottom:16px;font-size:13px;line-height:1.8}
-  .notice strong{display:block;margin-bottom:4px}
-  @media(max-width:600px){.version-card{align-items:stretch}.version-actions{width:100%}.version-actions button{flex:1}.version-head{align-items:flex-start}}
+  .versions-page{max-width:1100px;margin:0 auto}.version-head{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}.version-head h2{margin:0;color:var(--primary-dark)}.version-status{font-size:13px;color:var(--text-muted)}.version-card{border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:12px;background:#fff;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.version-main{min-width:0;flex:1}.version-title{font-weight:700;color:var(--text);margin-bottom:6px;word-break:break-word}.version-meta{font-size:12px;color:var(--text-muted);line-height:1.8}.version-sha{font-family:monospace;direction:ltr;display:inline-block}.version-actions{display:flex;gap:8px;flex-wrap:wrap}.version-actions button{margin:0;min-width:105px}.danger-btn{background:#b42318!important;color:#fff!important;border-color:#b42318!important}.muted-btn{background:#f6f8fa!important;color:#344054!important;border:1px solid var(--border)!important}.diff-box{display:none;margin-top:14px;border-top:1px solid var(--border);padding-top:14px;white-space:pre-wrap;direction:ltr;text-align:left;font:12px/1.55 monospace;max-height:420px;overflow:auto;background:#f8fafc;padding:12px;border-radius:8px;width:100%}.empty-state{text-align:center;padding:35px;color:var(--text-muted)}.notice{padding:12px 14px;border-radius:8px;background:#fff8e6;border:1px solid #f1d58a;color:#6b4f00;margin-bottom:16px;font-size:13px;line-height:1.8}.notice strong{display:block;margin-bottom:4px}@media(max-width:600px){.version-card{align-items:stretch}.version-actions{width:100%}.version-actions button{flex:1}.version-head{align-items:flex-start}}
 </style>
 </head>
 <body class="has-sidebar">
-<header>
-  <button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1>
-  <div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px;">خروج</button></div>
-</header>
-<nav>
-  <a href="inventory.html">المخزون</a>
-  <a href="sales.html">المبيعات</a>
-  <a href="invoices.html">الفواتير</a>
-  <a href="shortages.html">النواقص</a>
-  <a href="expenses.html">المصروفات</a>
-  <a href="profit.html">الأرباح</a>
-  <a href="search.html">بحث الأدوية</a>
-  <a href="users.html">المستخدمون</a>
-</nav>
+<header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px;">خروج</button></div></header>
+<nav><a href="inventory.html">المخزون</a><a href="sales.html">المبيعات</a><a href="invoices.html">الفواتير</a><a href="shortages.html">النواقص</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">بحث الأدوية</a><a href="users.html">المستخدمون</a></nav>
 <div id="sidebarOverlay" class="sidebar-overlay"></div>
-<div class="main-content">
-  <div class="versions-page">
-    <div class="card">
-      <div class="version-head">
-        <div><h2>🕘 إصدارات النظام</h2><div class="version-status" id="versionStatus">جاري تحميل سجل التعديلات...</div></div>
-        <button id="refreshBtn" class="muted-btn">↻ تحديث</button>
-      </div>
-      <div class="notice"><strong>استرجاع آمن للكود</strong>الاسترجاع يعيد ملفات النظام البرمجية إلى الإصدار المختار، ولا يرجع أو يحذف بيانات المبيعات والفواتير والمنتجات الموجودة في Supabase.</div>
-      <div id="versionsList"><div class="empty-state">جاري التحميل...</div></div>
-    </div>
-  </div>
-</div>
+<div class="main-content"><div class="versions-page"><div class="card"><div class="version-head"><div><h2>🕘 إصدارات النظام</h2><div class="version-status" id="versionStatus">جاري تحميل سجل التعديلات...</div></div><button id="refreshBtn" class="muted-btn">↻ تحديث</button></div><div class="notice"><strong>استرجاع آمن للكود</strong>الاسترجاع يعيد ملفات النظام البرمجية إلى الإصدار المختار، ولا يرجع أو يحذف بيانات المبيعات والفواتير والمنتجات الموجودة في Supabase.</div><div id="versionsList"><div class="empty-state">جاري التحميل...</div></div></div></div></div>
 <script src="config.js"></script>
 <script>
 const VERSION_API = SUPABASE_URL + '/functions/v1/github-version-control';
 let currentUser = null;
-
 function esc(value){return String(value ?? '').replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));}
 function fmtDate(value){try{return new Intl.DateTimeFormat('ar-EG',{dateStyle:'medium',timeStyle:'short',timeZone:'Africa/Cairo'}).format(new Date(value));}catch(_){return value||'';}}
-async function api(action, extra={}){
-  const {data:{session}} = await sb.auth.getSession();
-  if(!session) throw new Error('انتهت جلسة الدخول. سجل الدخول مرة أخرى.');
-  const res = await fetch(VERSION_API,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},body:JSON.stringify({action,...extra})});
-  const body = await res.json().catch(()=>({}));
-  if(!res.ok) throw new Error(body.error || 'تعذر تنفيذ العملية.');
-  return body;
-}
-
-async function loadVersions(){
-  const status=document.getElementById('versionStatus'), list=document.getElementById('versionsList');
-  status.textContent='جاري تحميل سجل التعديلات...'; list.innerHTML='<div class="empty-state">جاري التحميل...</div>';
-  try{
-    const result=await api('list_versions');
-    const versions=result.versions||[];
-    status.textContent='آخر تحديث: '+fmtDate(new Date());
-    if(!versions.length){list.innerHTML='<div class="empty-state">لا توجد إصدارات مسجلة حتى الآن.</div>';return;}
-    list.innerHTML=versions.map((v,i)=>`<div class="version-card" data-sha="${esc(v.sha)}">
-      <div class="version-main"><div class="version-title">${esc(v.message||'بدون وصف')}</div>
-      <div class="version-meta">${fmtDate(v.date)} · ${esc(v.author||'غير معروف')} · <span class="version-sha">${esc(v.sha.slice(0,10))}</span>${i===0?' · <strong>الإصدار الحالي</strong>':''}</div></div>
-      <div class="version-actions"><button class="muted-btn" onclick="showChanges('${esc(v.sha)}',this)">عرض التغييرات</button>${i!==0?`<button class="danger-btn" onclick="restoreVersion('${esc(v.sha)}','${esc(v.message||'هذا الإصدار')}')">استرجاع</button>`:''}</div>
-      <div class="diff-box" id="diff-${esc(v.sha)}"></div></div>`).join('');
-  }catch(err){status.textContent='حدث خطأ';list.innerHTML='<div class="empty-state">'+esc(err.message)+'</div>';}
-}
-
-async function showChanges(sha,button){
-  const box=document.getElementById('diff-'+sha); if(!box)return;
-  if(box.style.display==='block'){box.style.display='none';button.textContent='عرض التغييرات';return;}
-  button.disabled=true;button.textContent='جاري التحميل...';
-  try{
-    const result=await api('view_version',{sha});
-    const files=result.files||[];
-    box.textContent=files.length?files.map(f=>`${f.status||'modified'}  ${f.filename||''}  (+${f.additions||0} / -${f.deletions||0})`).join('\n'):'لا توجد تغييرات ملفية في هذا الإصدار.';
-    box.style.display='block';button.textContent='إخفاء التغييرات';
-  }catch(err){box.textContent=err.message;box.style.display='block';button.textContent='عرض التغييرات';}
-  finally{button.disabled=false;}
-}
-
-async function restoreVersion(sha,message){
-  const ok=confirm('هل أنت متأكد من استرجاع هذا الإصدار؟\n\n'+message+'\n\nسيتم إنشاء Commit جديد على GitHub يعيد كود النظام للإصدار المختار. بيانات Supabase لن يتم حذفها.');
-  if(!ok)return;
-  try{
-    document.getElementById('versionStatus').textContent='جاري استرجاع الإصدار... لا تغلق الصفحة.';
-    const result=await api('restore_version',{sha});
-    alert('تم الاسترجاع بنجاح.\n\nCommit: '+(result.commit_sha||'تم إنشاؤه'));
-    await loadVersions();
-  }catch(err){alert('فشل الاسترجاع:\n'+err.message);await loadVersions();}
-}
-
-(async function init(){
-  const auth=await requireAuth(); if(!auth)return;
-  currentUser=auth.user;
-  if(auth.profile?.role!=='admin'){
-    document.body.innerHTML='<div style="font-family:sans-serif;text-align:center;padding:70px 20px;color:#6b7684;">مفيش صلاحية لدخول إدارة إصدارات النظام.</div>';
-    return;
-  }
-  document.getElementById('userinfo').textContent=auth.profile?.full_name||auth.user.email||'';
-  document.getElementById('logoutBtn').addEventListener('click',async()=>{await sb.auth.signOut();location.href='index.html';});
-  document.getElementById('refreshBtn').addEventListener('click',loadVersions);
-  await loadVersions();
-})();
+async function api(action,extra={}){const {data:{session}}=await sb.auth.getSession();if(!session)throw new Error('انتهت جلسة الدخول. سجل الدخول مرة أخرى.');const res=await fetch(VERSION_API,{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+session.access_token},body:JSON.stringify({action,...extra})});const body=await res.json().catch(()=>({}));if(!res.ok)throw new Error(body.error||'تعذر تنفيذ العملية.');return body;}
+async function loadVersions(){const status=document.getElementById('versionStatus'),list=document.getElementById('versionsList');status.textContent='جاري تحميل سجل التعديلات...';list.innerHTML='<div class="empty-state">جاري التحميل...</div>';try{const result=await api('list_versions');const versions=result.versions||[];status.textContent='آخر تحديث: '+fmtDate(new Date());if(!versions.length){list.innerHTML='<div class="empty-state">لا توجد إصدارات مسجلة حتى الآن.</div>';return;}list.innerHTML=versions.map((v,i)=>{const sha=esc(v.sha);return `<div class="version-card" data-sha="${sha}"><div class="version-main"><div class="version-title">${esc(v.message||'بدون وصف')}</div><div class="version-meta">${fmtDate(v.date)} · ${esc(v.author||'غير معروف')} · <span class="version-sha">${esc(v.sha.slice(0,10))}</span>${i===0?' · <strong>الإصدار الحالي</strong>':''}</div></div><div class="version-actions"><button type="button" class="muted-btn js-show-changes" data-sha="${sha}">عرض التغييرات</button>${i!==0?`<button type="button" class="danger-btn js-restore" data-sha="${sha}">استرجاع</button>`:''}</div><div class="diff-box" id="diff-${sha}"></div></div>`;}).join('');}
+catch(err){status.textContent='حدث خطأ';list.innerHTML='<div class="empty-state">'+esc(err.message)+'</div>';}}
+async function showChanges(sha,button){const box=document.getElementById('diff-'+sha);if(!box)return;if(box.style.display==='block'){box.style.display='none';button.textContent='عرض التغييرات';return;}button.disabled=true;button.textContent='جاري التحميل...';try{const result=await api('view_version',{sha});const files=result.files||[];box.textContent=files.length?files.map(f=>`${f.status||'modified'}  ${f.filename||''}  (+${f.additions||0} / -${f.deletions||0})`).join('\n'):'لا توجد تغييرات ملفية في هذا الإصدار.';box.style.display='block';button.textContent='إخفاء التغييرات';}catch(err){box.textContent=err.message;box.style.display='block';button.textContent='عرض التغييرات';}finally{button.disabled=false;}}
+async function restoreVersion(sha,message){const ok=confirm('هل أنت متأكد من استرجاع هذا الإصدار؟\n\n'+message+'\n\nسيتم إنشاء Commit جديد على GitHub يعيد كود النظام للإصدار المختار. بيانات Supabase لن يتم حذفها.');if(!ok)return;try{document.getElementById('versionStatus').textContent='جاري استرجاع الإصدار... لا تغلق الصفحة.';const result=await api('restore_version',{sha});alert('تم الاسترجاع بنجاح.\n\nCommit: '+(result.commit_sha||'تم إنشاؤه'));await loadVersions();}catch(err){alert('فشل الاسترجاع:\n'+err.message);await loadVersions();}}
+(async function init(){const auth=await requireAuth();if(!auth)return;currentUser=auth.user;if(auth.profile?.role!=='admin'){document.body.innerHTML='<div style="font-family:sans-serif;text-align:center;padding:70px 20px;color:#6b7684;">مفيش صلاحية لدخول إدارة إصدارات النظام.</div>';return;}document.getElementById('userinfo').textContent=auth.profile?.full_name||auth.user.email||'';document.getElementById('logoutBtn').addEventListener('click',async()=>{await sb.auth.signOut();location.href='index.html';});document.getElementById('refreshBtn').addEventListener('click',loadVersions);document.getElementById('versionsList').addEventListener('click',event=>{const show=event.target.closest('.js-show-changes');if(show){showChanges(show.dataset.sha,show);return;}const restore=event.target.closest('.js-restore');if(restore){const card=restore.closest('.version-card');const message=card?.querySelector('.version-title')?.textContent||'هذا الإصدار';restoreVersion(restore.dataset.sha,message);}});await loadVersions();})();
 </script>
 </body>
 </html>
