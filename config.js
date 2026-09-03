@@ -4,20 +4,17 @@
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
 
-// كل صفحة HTML تنشئ client جديد. لذلك نوقف auto-refresh ونقوم بعمل
-// refresh مضبوط من الصفحة الحالية فقط، لتجنب أن صفحتين تتسابقان على نفس refresh-token.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
-    autoRefreshToken: false,
+    autoRefreshToken: true,
     detectSessionInUrl: false,
     storage: window.localStorage,
     storageKey: 'farma-auth'
   }
 });
 
-// اخفاء الصفحة ذات الـSidebar قبل أن تكتمل كل ملفات الـSidebar.
-// هذا يمنع ظهور الـnav القديم ولو لجزء من الثانية أثناء الانتقال بين الصفحات.
+// امنع ظهور الـ layout القديم أثناء تجهيز الـ sidebar.
 (function installSidebarPreloadGuard() {
   if (document.getElementById('farmaSidebarPreloadGuard')) return;
   const style = document.createElement('style');
@@ -26,13 +23,13 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   document.head.appendChild(style);
 })();
 
-async function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+async function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 let farmaRedirectingToLogin = false;
 let farmaLastKnownSession = null;
 let farmaLastKnownProfile = null;
-let farmaAuthInitialized = false;
-let farmaRefreshInFlight = null;
 
 try {
   const cachedProfile = localStorage.getItem('farma-profile-cache');
@@ -55,73 +52,8 @@ async function getStableSession() {
   return null;
 }
 
-async function refreshSessionSafely(session) {
-  if (!session) return null;
-  if (farmaRefreshInFlight) return farmaRefreshInFlight;
-
-  const expiresAt = Number(session.expires_at || 0) * 1000;
-  const remaining = expiresAt ? expiresAt - Date.now() : 0;
-  if (remaining > 10 * 60 * 1000) return session;
-
-  const lockKey = 'farma-auth-refresh-lock';
-  const now = Date.now();
-  try {
-    const existing = Number(localStorage.getItem(lockKey) || 0);
-    if (existing && now - existing < 15000) {
-      await sleep(1200);
-      const recovered = await getStableSession();
-      return recovered || (expiresAt > Date.now() ? session : null);
-    }
-    localStorage.setItem(lockKey, String(now));
-  } catch (_) {}
-
-  farmaRefreshInFlight = (async () => {
-    try {
-      const { data, error } = await sb.auth.refreshSession({ refresh_token: session.refresh_token });
-      if (!error && data?.session) {
-        farmaLastKnownSession = data.session;
-        return data.session;
-      }
-      console.warn('Session refresh failed:', error);
-      return expiresAt > Date.now() ? session : null;
-    } catch (err) {
-      console.warn('Session refresh exception:', err);
-      return expiresAt > Date.now() ? session : null;
-    } finally {
-      try { localStorage.removeItem(lockKey); } catch (_) {}
-      farmaRefreshInFlight = null;
-    }
-  })();
-
-  return farmaRefreshInFlight;
-}
-
-async function waitForStableSession() {
-  for (let attempt = 0; attempt < 4; attempt++) {
-    const session = await getStableSession();
-    if (session) return refreshSessionSafely(session);
-    if (attempt < 3) await sleep(350);
-  }
-  return null;
-}
-
-function startFarmaSessionKeepAlive() {
-  if (window.__farmaKeepAliveStarted) return;
-  window.__farmaKeepAliveStarted = true;
-
-  const tick = async () => {
-    const session = await getStableSession();
-    if (session) await refreshSessionSafely(session);
-  };
-
-  window.__farmaKeepAliveTimer = setInterval(tick, 5 * 60 * 1000);
-  window.addEventListener('beforeunload', () => {
-    clearInterval(window.__farmaKeepAliveTimer);
-  }, { once: true });
-}
-
 async function getStableProfile(userId) {
-  for (let attempt = 0; attempt < 4; attempt++) {
+  for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const { data, error } = await sb
         .from('profiles')
@@ -131,30 +63,30 @@ async function getStableProfile(userId) {
 
       if (!error && data) {
         farmaLastKnownProfile = data;
-        try { localStorage.setItem('farma-profile-cache', JSON.stringify(data)); } catch (_) {}
+        try {
+          localStorage.setItem('farma-profile-cache', JSON.stringify(data));
+        } catch (cacheErr) {
+          console.warn('Could not cache profile:', cacheErr);
+        }
         return data;
       }
       console.warn('Profile lookup attempt failed:', error);
     } catch (err) {
       console.warn('Profile lookup exception:', err);
     }
-    if (attempt < 3) await sleep(400 * (attempt + 1));
+
+    if (attempt < 2) await sleep(350 * (attempt + 1));
   }
   return null;
 }
 
 async function requireAuth() {
-  if (farmaAuthInitialized) {
-    const session = await getStableSession();
-    if (session) {
-      startFarmaSessionKeepAlive();
-      return requireAuthWithSession(session);
-    }
-    return null;
-  }
+  let session = await getStableSession();
 
-  farmaAuthInitialized = true;
-  const session = await waitForStableSession();
+  if (!session) {
+    await sleep(500);
+    session = await getStableSession();
+  }
 
   if (!session) {
     if (!farmaRedirectingToLogin) {
@@ -164,12 +96,15 @@ async function requireAuth() {
     return null;
   }
 
-  startFarmaSessionKeepAlive();
+  // لا نستدعي refreshSession() يدويًا هنا.
+  // Supabase autoRefreshToken يتولى التجديد في الخلفية، وتجنّب refresh
+  // في كل صفحة يمنع سباق refresh-token عند التنقل السريع بين الصفحات.
   return requireAuthWithSession(session);
 }
 
 async function requireAuthWithSession(session) {
   const profile = await getStableProfile(session.user.id);
+
   if (profile) return { user: session.user, profile };
 
   if (farmaLastKnownProfile) {
@@ -194,47 +129,40 @@ sb.auth.onAuthStateChange((event, session) => {
 
 function guardPageAccess(profile, pageKey) {
   if (profile.role === 'admin') return true;
+
   const allowed = profile.allowed_pages || [];
 
   document.querySelectorAll('nav a[href$=".html"]').forEach(a => {
     const key = a.getAttribute('href').replace('.html', '');
-    if (key === 'users') a.style.display = 'none';
-    else if (!allowed.includes(key)) a.style.display = 'none';
+    if (key === 'users') {
+      a.style.display = 'none';
+    } else if (!allowed.includes(key)) {
+      a.style.display = 'none';
+    }
   });
 
   if (!allowed.includes(pageKey)) {
-    document.body.innerHTML = '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#6b7684;">' +
-      'مفيش صلاحية لدخول القسم ده. <a href="' + (allowed[0] || 'index') + '.html" style="color:#0d9488;">ارجع للصفحة المسموحة</a></div>';
+    document.body.innerHTML =
+      '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#6b7684;">' +
+      'مفيش صلاحية لدخول القسم ده. <a href="' + (allowed[0] || 'index') + '.html" style="color:#0d9488;">ارجع للصفحة المسموحة</a>' +
+      '</div>';
     return false;
   }
   return true;
 }
 
-// ننتظر تحميل sidebar.css فعليًا قبل إزالة حالة الإخفاء.
-// السبب: إضافة class الجاهزية قبل انتهاء تحميل CSS كانت تسمح للـnav القديم
-// في style.css أن يظهر للحظة قبل تطبيق تصميم الـSidebar الجديد.
-let farmaSidebarCssReady = Promise.resolve();
 (function loadSidebarStyles() {
   if (document.getElementById('farmaSidebarCss')) return;
-  farmaSidebarCssReady = new Promise(resolve => {
-    const link = document.createElement('link');
-    link.id = 'farmaSidebarCss';
-    link.rel = 'stylesheet';
-    link.href = 'sidebar.css?v=6';
-    link.onload = () => resolve();
-    link.onerror = () => resolve();
-    document.head.appendChild(link);
-  });
+  const link = document.createElement('link');
+  link.id = 'farmaSidebarCss';
+  link.rel = 'stylesheet';
+  link.href = 'sidebar.css?v=4';
+  document.head.appendChild(link);
 })();
 
-async function setupFarmaSidebar() {
-  await farmaSidebarCssReady;
-
+function setupFarmaSidebar() {
   const sidebar = document.querySelector('nav');
-  if (!sidebar) {
-    document.body.classList.add('farma-sidebar-ready');
-    return;
-  }
+  if (!sidebar) return;
 
   const links = Array.from(sidebar.querySelectorAll('a[href$=".html"]'));
   if (!links.length || sidebar.dataset.farmaBuilt === '1') {
@@ -243,9 +171,11 @@ async function setupFarmaSidebar() {
   }
 
   sidebar.dataset.farmaBuilt = '1';
+
   const currentFile = (location.pathname.split('/').pop() || 'inventory.html').toLowerCase();
   const byHref = {};
   links.forEach(a => { byHref[a.getAttribute('href')] = a; });
+
   sidebar.innerHTML = '';
 
   const brand = document.createElement('div');
@@ -268,18 +198,21 @@ async function setupFarmaSidebar() {
   function addGroup(group) {
     const existing = group.hrefs.map(h => byHref[h]).filter(Boolean);
     if (!existing.length) return;
+
     const wrapper = document.createElement('div');
     wrapper.className = 'farma-nav-group';
+
     const toggle = document.createElement('button');
     toggle.type = 'button';
     toggle.className = 'farma-nav-group-toggle';
     toggle.innerHTML = '<span class="farma-nav-group-title"><span>' + group.icon + '</span><span>' + group.title + '</span></span><span class="farma-nav-chevron">›</span>';
+
     const sub = document.createElement('div');
     sub.className = 'farma-nav-sub';
     const inner = document.createElement('div');
     inner.className = 'farma-nav-sub-inner';
-    let hasCurrent = false;
 
+    let hasCurrent = false;
     existing.forEach(a => {
       const href = a.getAttribute('href');
       const label = a.textContent.trim();
@@ -296,6 +229,7 @@ async function setupFarmaSidebar() {
     wrapper.appendChild(toggle);
     wrapper.appendChild(sub);
     sidebar.appendChild(wrapper);
+
     if (hasCurrent) wrapper.classList.add('open');
     toggle.addEventListener('click', () => wrapper.classList.toggle('open'));
   }
@@ -327,7 +261,9 @@ async function setupFarmaSidebar() {
 
   const saved = localStorage.getItem('farmaSidebarCollapsed') === '1';
   setCollapsed(saved);
-  collapse.addEventListener('click', () => setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed')));
+  collapse.addEventListener('click', () => {
+    setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed'));
+  });
 
   const overlay = document.getElementById('sidebarOverlay');
   const toggleMobile = document.getElementById('menuToggle');
@@ -346,7 +282,7 @@ async function setupFarmaSidebar() {
     sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
   }
 
-  // مهم جدًا: لا نكشف الصفحة إلا بعد اكتمال بناء الـSidebar وتطبيق CSS الخاص به.
+  // مهم جدًا: لا نظهر الصفحة قبل اكتمال بناء الـ sidebar بالكامل.
   document.body.classList.add('farma-sidebar-ready');
 }
 
@@ -356,6 +292,7 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   const isInventoryPage = /(^|\/)inventory\.html$/i.test(window.location.pathname);
   if (!isInventoryPage) return;
   if (document.getElementById('farmaInventoryEnhancements')) return;
+
   const script = document.createElement('script');
   script.id = 'farmaInventoryEnhancements';
   script.src = 'inventory-enhancements.js?v=1';
@@ -369,14 +306,24 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   const cairoParts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit'
   }).formatToParts(new Date());
-  const getPart = type => cairoParts.find(p => p.type === type)?.value || '';
+
+  const getPart = type => {
+    const part = cairoParts.find(p => p.type === type);
+    return part ? part.value : '';
+  };
+
   const cairoToday = { year: Number(getPart('year')), month: Number(getPart('month')), day: Number(getPart('day')) };
-  const cairoStartIso = (year, month, day) => new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
+
+  const cairoStartIso = (year, month, day) => {
+    return new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
+  };
+
   const shiftCairoDate = (year, month, day, deltaDays) => {
     const d = new Date(Date.UTC(year, month - 1, day));
     d.setUTCDate(d.getUTCDate() + deltaDays);
     return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() };
   };
+
   const originalGetRangeStart = window.getRangeStart;
 
   setTimeout(() => {
@@ -393,6 +340,7 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
       }
       return typeof originalGetRangeStart === 'function' ? originalGetRangeStart(range) : null;
     };
+
     if (typeof window.loadRecentSales === 'function') window.loadRecentSales();
   }, 0);
 })();
