@@ -257,6 +257,7 @@
         '<option value="ar_desc">الاسم العربي: ي → أ</option>' +
         '<option value="en_asc">الاسم الإنجليزي: A → Z</option>' +
         '<option value="en_desc">الاسم الإنجليزي: Z → A</option>' +
+        '<option value="created_desc">الأحدث</option>' +
       '</select>';
 
     const search = document.getElementById('searchBox');
@@ -269,6 +270,38 @@
       localStorage.setItem('farmaInventorySort', e.target.value);
       rerender();
     });
+  }
+
+  function installCreatedAtSort() {
+    if (window.__farmaCreatedAtSortInstalled) return;
+    if (typeof window.renderInventoryTable !== 'function') return;
+    window.__farmaCreatedAtSortInstalled = true;
+
+    const originalRender = window.renderInventoryTable;
+    window.renderInventoryTable = function(searchText) {
+      const select = document.getElementById('inventorySort');
+      if (!select || select.value !== 'created_desc') {
+        return originalRender(searchText);
+      }
+
+      const cache = window._productsCache || [];
+      const sorted = [...cache].sort((a, b) => {
+        const ta = Date.parse(a?.created_at || '') || 0;
+        const tb = Date.parse(b?.created_at || '') || 0;
+        if (tb !== ta) return tb - ta;
+        return String(b?.id || '').localeCompare(String(a?.id || ''));
+      });
+
+      window._productsCache = sorted;
+      const previous = select.value;
+      select.value = 'ar_asc';
+      try {
+        return originalRender(searchText);
+      } finally {
+        select.value = previous;
+        window._productsCache = cache;
+      }
+    };
   }
 
   function addUnclassifiedOptions() {
@@ -326,6 +359,7 @@
     initialized = true;
     ensureAmpouleOption();
     addSortControl();
+    installCreatedAtSort();
     addExtraFilterDetails();
     addUnclassifiedOptions();
     observeFilterRebuilds();
