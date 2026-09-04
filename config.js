@@ -2,7 +2,7 @@
 // إعدادات الاتصال بـ Supabase - ملف مشترك تستخدمه كل صفحات السيستم
 // ============================================================
 const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhucHB1enVsbGZ5eGVxd3hoeXRzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU5NTkyNzEsImV4cCI6MjEwMTUzNTI3MX0.kWCN1qai3IcbkiD30Ng-SmyqJGqTl6BHskNrcDJnEU8";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ4bnBwdXp1bGxm eXF3eHF3aHl0cyIsImlhdCI6MTc4NTk1OTI3MSwiZXhwIjoyMTAxNTM1MjcxfQ";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
@@ -14,7 +14,6 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   }
 });
 
-// امنع ظهور الـ layout القديم أثناء تجهيز الـ sidebar.
 (function installSidebarPreloadGuard() {
   if (document.getElementById('farmaSidebarPreloadGuard')) return;
   const style = document.createElement('style');
@@ -24,57 +23,31 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
 })();
 
 async function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
 let farmaRedirectingToLogin = false;
 let farmaLastKnownSession = null;
 let farmaLastKnownProfile = null;
-
-try {
-  const cachedProfile = localStorage.getItem('farma-profile-cache');
-  if (cachedProfile) farmaLastKnownProfile = JSON.parse(cachedProfile);
-} catch (err) {
-  console.warn('Could not restore cached profile:', err);
-}
+try { const cachedProfile = localStorage.getItem('farma-profile-cache'); if (cachedProfile) farmaLastKnownProfile = JSON.parse(cachedProfile); } catch (err) { console.warn('Could not restore cached profile:', err); }
 
 async function getStableSession() {
-  try {
-    const { data, error } = await sb.auth.getSession();
-    if (!error && data?.session) {
-      farmaLastKnownSession = data.session;
-      return data.session;
-    }
-    if (error) console.warn('Session lookup failed:', error);
-  } catch (err) {
-    console.warn('Session lookup exception:', err);
-  }
+  try { const { data, error } = await sb.auth.getSession(); if (!error && data?.session) { farmaLastKnownSession = data.session; return data.session; } if (error) console.warn('Session lookup failed:', error); }
+  catch (err) { console.warn('Session lookup exception:', err); }
   return null;
 }
-
 function hasPersistedFarmaSession() {
-  try {
-    const raw = localStorage.getItem('farma-auth');
-    if (!raw) return false;
-    const stored = JSON.parse(raw);
-    return Boolean(stored?.access_token || stored?.refresh_token || stored?.session?.access_token || stored?.session?.refresh_token);
-  } catch (err) { return false; }
+  try { const raw = localStorage.getItem('farma-auth'); if (!raw) return false; const stored = JSON.parse(raw); return Boolean(stored?.access_token || stored?.refresh_token || stored?.session?.access_token || stored?.session?.refresh_token); }
+  catch (err) { return false; }
 }
-
 async function getStableProfile(userId) {
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
       const { data, error } = await sb.from('profiles').select('role, full_name, allowed_pages').eq('id', userId).single();
-      if (!error && data) {
-        farmaLastKnownProfile = data;
-        try { localStorage.setItem('farma-profile-cache', JSON.stringify(data)); } catch (_) {}
-        return data;
-      }
+      if (!error && data) { farmaLastKnownProfile = data; try { localStorage.setItem('farma-profile-cache', JSON.stringify(data)); } catch (_) {} return data; }
       console.warn('Profile lookup attempt failed:', error);
     } catch (err) { console.warn('Profile lookup exception:', err); }
     if (attempt < 2) await sleep(350 * (attempt + 1));
   }
   return null;
 }
-
 async function requireAuth() {
   for (let attempt = 0; attempt < 6; attempt++) {
     const session = await getStableSession();
@@ -83,32 +56,21 @@ async function requireAuth() {
     if (!persisted && attempt >= 2) break;
     await sleep(500);
   }
-  if (!farmaRedirectingToLogin) {
-    farmaRedirectingToLogin = true;
-    window.location.replace('index.html');
-  }
+  if (!farmaRedirectingToLogin) { farmaRedirectingToLogin = true; window.location.replace('index.html'); }
   return null;
 }
-
 async function requireAuthWithSession(session) {
   const profile = await getStableProfile(session.user.id);
   if (profile) return { user: session.user, profile };
   if (farmaLastKnownProfile) return { user: session.user, profile: farmaLastKnownProfile };
   return { user: session.user, profile: { role: 'employee', full_name: session.user.email || 'مستخدم', allowed_pages: [] } };
 }
-
-sb.auth.onAuthStateChange((event, session) => {
-  if (session) farmaLastKnownSession = session;
-  console.debug('Farma auth event:', event, session ? 'session-present' : 'no-session');
-});
+sb.auth.onAuthStateChange((event, session) => { if (session) farmaLastKnownSession = session; console.debug('Farma auth event:', event, session ? 'session-present' : 'no-session'); });
 
 function guardPageAccess(profile, pageKey) {
   if (profile.role === 'admin') return true;
   const allowed = profile.allowed_pages || [];
-  document.querySelectorAll('nav a[href$=".html"]').forEach(a => {
-    const key = a.getAttribute('href').replace('.html', '');
-    if (key === 'users' || !allowed.includes(key)) a.style.display = 'none';
-  });
+  document.querySelectorAll('nav a[href$=".html"]').forEach(a => { const key = a.getAttribute('href').replace('.html', ''); if (key === 'users' || !allowed.includes(key)) a.style.display = 'none'; });
   if (!allowed.includes(pageKey)) {
     document.body.innerHTML = '<div style="font-family:sans-serif;text-align:center;padding:60px 20px;color:#6b7684;">مفيش صلاحية لدخول القسم ده. <a href="' + (allowed[0] || 'index') + '.html" style="color:#0d9488;">ارجع للصفحة المسموحة</a></div>';
     return false;
@@ -119,14 +81,8 @@ function guardPageAccess(profile, pageKey) {
 let farmaSidebarCssPromise = null;
 (function loadSidebarStyles() {
   if (document.getElementById('farmaSidebarCss')) { farmaSidebarCssPromise = Promise.resolve(); return; }
-  const link = document.createElement('link');
-  link.id = 'farmaSidebarCss';
-  link.rel = 'stylesheet';
-  link.href = 'sidebar.css?v=5';
-  farmaSidebarCssPromise = new Promise(resolve => {
-    link.onload = resolve;
-    link.onerror = () => { console.warn('Sidebar CSS failed to load; continuing with fallback styles.'); resolve(); };
-  });
+  const link = document.createElement('link'); link.id = 'farmaSidebarCss'; link.rel = 'stylesheet'; link.href = 'sidebar.css?v=5';
+  farmaSidebarCssPromise = new Promise(resolve => { link.onload = resolve; link.onerror = () => { console.warn('Sidebar CSS failed to load; continuing with fallback styles.'); resolve(); }; });
   document.head.appendChild(link);
 })();
 
@@ -138,86 +94,57 @@ async function setupFarmaSidebar() {
   if (!links.length || sidebar.dataset.farmaBuilt === '1') { document.body.classList.add('farma-sidebar-ready'); return; }
   sidebar.dataset.farmaBuilt = '1';
   const currentFile = (location.pathname.split('/').pop() || 'inventory.html').toLowerCase();
-  const byHref = {};
-  links.forEach(a => { byHref[a.getAttribute('href')] = a; });
-  sidebar.innerHTML = '';
-  const brand = document.createElement('div');
-  brand.className = 'farma-sidebar-brand';
-  brand.innerHTML = '<div class="farma-sidebar-brand-logo">F</div><div class="farma-sidebar-brand-text">Farma<small>إدارة الصيدلية</small></div>';
-  sidebar.appendChild(brand);
-  const collapse = document.createElement('button');
-  collapse.type = 'button'; collapse.className = 'farma-nav-collapse'; collapse.title = 'تصغير القائمة'; collapse.textContent = '‹';
-  sidebar.appendChild(collapse);
+  const byHref = {}; links.forEach(a => { byHref[a.getAttribute('href')] = a; }); sidebar.innerHTML = '';
+  const brand = document.createElement('div'); brand.className = 'farma-sidebar-brand'; brand.innerHTML = '<div class="farma-sidebar-brand-logo">F</div><div class="farma-sidebar-brand-text">Farma<small>إدارة الصيدلية</small></div>'; sidebar.appendChild(brand);
+  const collapse = document.createElement('button'); collapse.type = 'button'; collapse.className = 'farma-nav-collapse'; collapse.title = 'تصغير القائمة'; collapse.textContent = '‹'; sidebar.appendChild(collapse);
   const groups = [
     { title: 'المخزون', icon: '📦', hrefs: ['inventory.html', 'shortages.html'] },
-    { title: 'المبيعات', icon: '🛒', hrefs: ['sales.html', 'invoices.html'] }
+    { title: 'المبيعات', icon: '🛒', hrefs: ['sales.html', 'invoices.html'] },
+    { title: 'الموظفون', icon: '👥', hrefs: ['attendance.html'] }
   ];
   function addGroup(group) {
-    const existing = group.hrefs.map(h => byHref[h]).filter(Boolean);
-    if (!existing.length) return;
+    const existing = group.hrefs.map(h => byHref[h]).filter(Boolean); if (!existing.length) return;
     const wrapper = document.createElement('div'); wrapper.className = 'farma-nav-group';
-    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'farma-nav-group-toggle';
-    toggle.innerHTML = '<span class="farma-nav-group-title"><span>' + group.icon + '</span><span>' + group.title + '</span></span><span class="farma-nav-chevron">›</span>';
-    const sub = document.createElement('div'); sub.className = 'farma-nav-sub';
-    const inner = document.createElement('div'); inner.className = 'farma-nav-sub-inner';
-    let hasCurrent = false;
-    existing.forEach(a => {
-      const href = a.getAttribute('href'); const label = a.textContent.trim();
-      const icon = href === 'inventory.html' ? '📋' : href === 'shortages.html' ? '⚠️' : href === 'sales.html' ? '🧾' : '📑';
-      a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>';
-      if (href.toLowerCase() === currentFile || a.classList.contains('active')) { a.classList.add('active'); hasCurrent = true; }
-      inner.appendChild(a);
-    });
-    sub.appendChild(inner); wrapper.appendChild(toggle); wrapper.appendChild(sub); sidebar.appendChild(wrapper);
-    if (hasCurrent) wrapper.classList.add('open');
-    toggle.addEventListener('click', () => wrapper.classList.toggle('open'));
+    const toggle = document.createElement('button'); toggle.type = 'button'; toggle.className = 'farma-nav-group-toggle'; toggle.innerHTML = '<span class="farma-nav-group-title"><span>' + group.icon + '</span><span>' + group.title + '</span></span><span class="farma-nav-chevron">›</span>';
+    const sub = document.createElement('div'); sub.className = 'farma-nav-sub'; const inner = document.createElement('div'); inner.className = 'farma-nav-sub-inner'; let hasCurrent = false;
+    existing.forEach(a => { const href = a.getAttribute('href'); const label = a.textContent.trim(); const icon = href === 'inventory.html' ? '📋' : href === 'shortages.html' ? '⚠️' : href === 'sales.html' ? '🧾' : href === 'attendance.html' ? '🕘' : '📑'; a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>'; if (href.toLowerCase() === currentFile || a.classList.contains('active')) { a.classList.add('active'); hasCurrent = true; } inner.appendChild(a); });
+    sub.appendChild(inner); wrapper.appendChild(toggle); wrapper.appendChild(sub); sidebar.appendChild(wrapper); if (hasCurrent) wrapper.classList.add('open'); toggle.addEventListener('click', () => wrapper.classList.toggle('open'));
   }
   groups.forEach(addGroup);
   const singles = [['expenses.html', '💳', 'المصروفات'], ['profit.html', '📊', 'الأرباح والتقارير'], ['search.html', '🔎', 'البحث عن دواء'], ['users.html', '👥', 'المستخدمون']];
-  singles.forEach(([href, icon, fallbackLabel]) => {
-    const a = byHref[href]; if (!a) return;
-    const label = href === 'users.html' ? fallbackLabel : (a.textContent.trim() || fallbackLabel);
-    a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>';
-    if (href.toLowerCase() === currentFile || a.classList.contains('active')) a.classList.add('active');
-    sidebar.appendChild(a);
-  });
-  // رابط إصدارات النظام يظهر للـ Admin فقط.
+  singles.forEach(([href, icon, fallbackLabel]) => { const a = byHref[href]; if (!a) return; const label = href === 'users.html' ? fallbackLabel : (a.textContent.trim() || fallbackLabel); a.innerHTML = '<span>' + icon + '</span><span>' + label + '</span>'; if (href.toLowerCase() === currentFile || a.classList.contains('active')) a.classList.add('active'); sidebar.appendChild(a); });
   const isAdmin = farmaLastKnownProfile?.role === 'admin';
-  if (isAdmin) {
-    const versionLink = document.createElement('a');
-    versionLink.href = 'versions.html';
-    versionLink.innerHTML = '<span>🕘</span><span>إصدارات النظام</span>';
-    if (currentFile === 'versions.html') versionLink.classList.add('active');
-    sidebar.appendChild(versionLink);
-  }
-  function setCollapsed(collapsed) {
-    document.body.classList.toggle('farma-sidebar-collapsed', collapsed);
-    collapse.textContent = collapsed ? '›' : '‹';
-    collapse.title = collapsed ? 'توسيع القائمة' : 'تصغير القائمة';
-    localStorage.setItem('farmaSidebarCollapsed', collapsed ? '1' : '0');
-  }
-  setCollapsed(localStorage.getItem('farmaSidebarCollapsed') === '1');
-  collapse.addEventListener('click', () => setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed')));
-  const overlay = document.getElementById('sidebarOverlay');
-  const toggleMobile = document.getElementById('menuToggle');
-  if (overlay && toggleMobile) {
-    const closeMobile = () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); document.body.classList.remove('nav-locked'); };
-    toggleMobile.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); document.body.classList.toggle('nav-locked', sidebar.classList.contains('open')); });
-    overlay.addEventListener('click', closeMobile);
-    sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile));
-  }
+  if (isAdmin) { const versionLink = document.createElement('a'); versionLink.href = 'versions.html'; versionLink.innerHTML = '<span>🕘</span><span>إصدارات النظام</span>'; if (currentFile === 'versions.html') versionLink.classList.add('active'); sidebar.appendChild(versionLink); }
+  function setCollapsed(collapsed) { document.body.classList.toggle('farma-sidebar-collapsed', collapsed); collapse.textContent = collapsed ? '›' : '‹'; collapse.title = collapsed ? 'توسيع القائمة' : 'تصغير القائمة'; localStorage.setItem('farmaSidebarCollapsed', collapsed ? '1' : '0'); }
+  setCollapsed(localStorage.getItem('farmaSidebarCollapsed') === '1'); collapse.addEventListener('click', () => setCollapsed(!document.body.classList.contains('farma-sidebar-collapsed')));
+  const overlay = document.getElementById('sidebarOverlay'); const toggleMobile = document.getElementById('menuToggle');
+  if (overlay && toggleMobile) { const closeMobile = () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); document.body.classList.remove('nav-locked'); }; toggleMobile.addEventListener('click', () => { sidebar.classList.toggle('open'); overlay.classList.toggle('open'); document.body.classList.toggle('nav-locked', sidebar.classList.contains('open')); }); overlay.addEventListener('click', closeMobile); sidebar.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobile)); }
   document.body.classList.add('farma-sidebar-ready');
 }
-
 document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
+
+// إضافة صلاحية الحضور إلى نموذج إنشاء المستخدم بدون تعديل بنية صفحة المستخدمين.
+document.addEventListener('DOMContentLoaded', () => {
+  if (!/users\.html$/i.test(location.pathname)) return;
+  const wrap = document.getElementById('pagesWrap');
+  if (!wrap || wrap.querySelector('.pageChk[value="attendance"]')) return;
+  const label = document.createElement('label'); label.style.cssText = 'display:flex;align-items:center;gap:6px;font-size:13px;';
+  label.innerHTML = '<input type="checkbox" class="pageChk" value="attendance" style="width:auto;margin:0;"> الحضور والانصراف';
+  const container = wrap.querySelector('div[style*="flex-wrap"]') || wrap.lastElementChild;
+  if (container) container.appendChild(label);
+});
+
+// حماية صفحة الحضور وفق صلاحيات المستخدم.
+document.addEventListener('DOMContentLoaded', async () => {
+  if (!/attendance\.html$/i.test(location.pathname)) return;
+  const a = await requireAuth();
+  if (a) guardPageAccess(a.profile, 'attendance');
+});
 
 (function loadInventoryEnhancements() {
   if (!/(^|\/)inventory\.html$/i.test(window.location.pathname)) return;
   if (document.getElementById('farmaInventoryEnhancements')) return;
-  const script = document.createElement('script');
-  script.id = 'farmaInventoryEnhancements';
-  script.src = 'inventory-enhancements.js?v=1';
-  document.head.appendChild(script);
+  const script = document.createElement('script'); script.id = 'farmaInventoryEnhancements'; script.src = 'inventory-enhancements.js?v=1'; document.head.appendChild(script);
 })();
 
 (function installCairoSalesDateFix() {
@@ -228,13 +155,5 @@ document.addEventListener('DOMContentLoaded', setupFarmaSidebar);
   const cairoStartIso = (year, month, day) => new Date(Date.UTC(year, month - 1, day, 0, 0, 0) - (3 * 60 * 60 * 1000)).toISOString();
   const shiftCairoDate = (year, month, day, deltaDays) => { const d = new Date(Date.UTC(year, month - 1, day)); d.setUTCDate(d.getUTCDate() + deltaDays); return { year: d.getUTCFullYear(), month: d.getUTCMonth() + 1, day: d.getUTCDate() }; };
   const originalGetRangeStart = window.getRangeStart;
-  setTimeout(() => {
-    window.getRangeStart = function(range) {
-      if (range === 'today') return cairoStartIso(cairoToday.year, cairoToday.month, cairoToday.day);
-      if (range === 'week') { const start = shiftCairoDate(cairoToday.year, cairoToday.month, cairoToday.day, -7); return cairoStartIso(start.year, start.month, start.day); }
-      if (range === 'month') { const start = new Date(Date.UTC(cairoToday.year, cairoToday.month - 1, cairoToday.day)); start.setUTCMonth(start.getUTCMonth() - 1); return cairoStartIso(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate()); }
-      return typeof originalGetRangeStart === 'function' ? originalGetRangeStart(range) : null;
-    };
-    if (typeof window.loadRecentSales === 'function') window.loadRecentSales();
-  }, 0);
+  setTimeout(() => { window.getRangeStart = function(range) { if (range === 'today') return cairoStartIso(cairoToday.year, cairoToday.month, cairoToday.day); if (range === 'week') { const start = shiftCairoDate(cairoToday.year, cairoToday.month, cairoToday.day, -7); return cairoStartIso(start.year, start.month, start.day); } if (range === 'month') { const start = new Date(Date.UTC(cairoToday.year, cairoToday.month - 1, cairoToday.day)); start.setUTCMonth(start.getUTCMonth() - 1); return cairoStartIso(start.getUTCFullYear(), start.getUTCMonth() + 1, start.getUTCDate()); } return typeof originalGetRangeStart === 'function' ? originalGetRangeStart(range) : null; }; if (typeof window.loadRecentSales === 'function') window.loadRecentSales(); }, 0);
 })();
