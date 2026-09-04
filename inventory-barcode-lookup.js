@@ -81,13 +81,30 @@
     return Number.isFinite(n) ? String(n) : '';
   }
 
+  function normalizeDosageForm(value) {
+    const s = String(value || '').trim().toLowerCase();
+    const map = {
+      tablet: 'قرص', tablets: 'قرص', tab: 'قرص', tabs: 'قرص',
+      capsule: 'كبسول', capsules: 'كبسول', cap: 'كبسول', caps: 'كبسول',
+      syrup: 'شراب', solution: 'محلول', suspension: 'معلق',
+      cream: 'كريم', ointment: 'مرهم', gel: 'جل', lotion: 'لوشن',
+      drops: 'قطرة', drop: 'قطرة', eye_drop: 'قطرة', ear_drop: 'قطرة',
+      suppository: 'لبوس', suppositories: 'لبوس',
+      ampoule: 'أمبول', ampoules: 'أمبول', injection: 'حقن', injections: 'حقن',
+      vial: 'فيال', vials: 'فيال', sachet: 'كيس', sachets: 'كيس',
+      powder: 'بودرة', spray: 'بخاخ', inhaler: 'بخاخ', shampoo: 'شامبو',
+      cream_gel: 'كريم', oral_drops: 'قطرة'
+    };
+    return map[s] || String(value || '').trim();
+  }
+
   function applyProduct(data) {
     const name = data.name || '';
     const nameEn = data.name_en || '';
     const active = data.active_ingredient || '';
     const concentration = data.concentration || '';
     const price = parsePrice(data.default_sale_price);
-    const shape = data.shape || '';
+    const shape = normalizeDosageForm(data.shape || '');
     const classification = data.classification || '';
     const company = data.manufacturer || '';
 
@@ -97,15 +114,11 @@
     if (concentration) setInput('p_concentration', concentration);
     if (price) setInput('p_box_price', price);
 
-    // Keep the current inventory-specific unit logic intact.
-    // We only prefill the closest matching type/shape/classification.
-    if (data.drug_type) setSelectValue('p_drug_type', data.drug_type, true);
-
     if (shape) {
       const shapeSelect = get('p_shape');
       const existingShape = shapeSelect && Array.from(shapeSelect.options).find(o =>
-        String(o.value).trim().toLowerCase() === String(shape).trim().toLowerCase() ||
-        String(o.textContent).trim().toLowerCase() === String(shape).trim().toLowerCase()
+        String(o.value).trim().toLowerCase() === shape.toLowerCase() ||
+        String(o.textContent).trim().toLowerCase() === shape.toLowerCase()
       );
       if (existingShape) {
         shapeSelect.value = existingShape.value;
@@ -116,15 +129,14 @@
         option.textContent = shape;
         shapeSelect.appendChild(option);
         shapeSelect.value = shape;
-        // Do not dispatch change here: it could overwrite the just-added option.
         if (typeof updateShapeFields === 'function') updateShapeFields(true);
       }
     }
 
     if (classification) setSelectValue('p_classification', classification, true);
 
-    // The product's manufacturer is useful, but the form calls this field "المورد".
-    // Only prefill it when it already exists; don't silently turn a manufacturer into a supplier.
+    // DwaPrices gives the manufacturer, while Farma's field is specifically "المورد".
+    // Only use it when that exact supplier already exists; otherwise leave the supplier untouched.
     if (company) setSelectValue('p_supplier', company, false);
 
     const priceNote = price ? ' السعر المقترح: ' + price + ' ج.' : '';
@@ -181,13 +193,10 @@
     input.addEventListener('blur', scheduleLookup);
 
     // The existing camera scanner writes directly to .value, so there is no input event.
-    // Poll only this single field; it is cheap and catches camera scans reliably.
     setInterval(() => {
       if (isEditing()) return;
       const value = cleanBarcode(input.value);
-      if (value && value !== lastBarcode && value.length >= 6) {
-        scheduleLookup();
-      }
+      if (value && value !== lastBarcode && value.length >= 6) scheduleLookup();
       if (!value) lastBarcode = '';
     }, 500);
   }
