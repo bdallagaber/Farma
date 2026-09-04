@@ -12,8 +12,9 @@
   const extraState = { supplier: [], ingredient: [], concentration: [] };
   let initialized = false;
   let rendering = false;
-  let extraSignature = '';
+  let extraCacheRef = null;
   let countFrame = 0;
+  let searchTimer = 0;
 
   const collatorAr = new Intl.Collator('ar', { sensitivity: 'base', numeric: true, ignorePunctuation: true });
   const collatorEn = new Intl.Collator('en', { sensitivity: 'base', numeric: true, ignorePunctuation: true });
@@ -199,13 +200,8 @@
   function refreshExtraFiltersIfNeeded() {
     if (!initialized) return;
     const products = window._productsCache || [];
-    let signature = String(products.length);
-    for (let i = 0; i < products.length; i++) {
-      const p = products[i];
-      signature += '|' + p.id + '|' + (p.supplier || '') + '|' + (p.active_ingredient || '') + '|' + (p.concentration || '');
-    }
-    if (signature === extraSignature) return;
-    extraSignature = signature;
+    if (products === extraCacheRef) return;
+    extraCacheRef = products;
     buildExtraFilter('filterSupplierBox', 'filterSupplierCount', 'supplierChk', 'supplier', 'المورد');
     buildExtraFilter('filterIngredientBox', 'filterIngredientCount', 'ingredientChk', 'active_ingredient', 'المادة الفعالة');
     buildExtraFilter('filterConcentrationBox', 'filterConcentrationCount', 'concentrationChk', 'concentration', 'التركيز');
@@ -303,7 +299,7 @@
   }
 
   function scheduleExtraCounts() {
-    if (countFrame) return;
+    if (countFrame) cancelAnimationFrame(countFrame);
     countFrame = requestAnimationFrame(() => {
       countFrame = 0;
       if (!rendering) updateExtraCounts();
@@ -324,15 +320,14 @@
     buildExtraFilter('filterSupplierBox', 'filterSupplierCount', 'supplierChk', 'supplier', 'المورد');
     buildExtraFilter('filterIngredientBox', 'filterIngredientCount', 'ingredientChk', 'active_ingredient', 'المادة الفعالة');
     buildExtraFilter('filterConcentrationBox', 'filterConcentrationCount', 'concentrationChk', 'concentration', 'التركيز');
-    let signature = String(window._productsCache.length);
-    for (const p of window._productsCache) signature += '|' + p.id + '|' + (p.supplier || '') + '|' + (p.active_ingredient || '') + '|' + (p.concentration || '');
-    extraSignature = signature;
+    extraCacheRef = window._productsCache;
 
     const search = document.getElementById('searchBox');
     if (search) {
       search.addEventListener('input', e => {
         e.stopImmediatePropagation();
-        rerender();
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => rerender(), 180);
       }, true);
     }
 
@@ -351,8 +346,9 @@
       refreshExtraFiltersIfNeeded();
       addUnclassifiedOptions();
       ensureAmpouleOption();
-      rerender();
-    }, 50);
+      updateHeaderCount((window._productsCache || []).length);
+      scheduleExtraCounts();
+    }, 300);
   }
 
   const timer = setInterval(() => {
