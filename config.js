@@ -5,20 +5,9 @@ const SUPABASE_URL = "https://xnppuzullfyxeqwxhyts.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_XDFuq8hI4IEBRo-saeWRvQ_AP_U5WW0";
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-    storage: window.localStorage,
-    storageKey: 'farma-auth'
-  }
+  auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false, storage: window.localStorage, storageKey: 'farma-auth' }
 });
-
-(function installSidebarPreloadGuard() {
-  if (document.getElementById('farmaSidebarPreloadGuard')) return;
-  const style = document.createElement('style'); style.id = 'farmaSidebarPreloadGuard';
-  style.textContent = 'body.has-sidebar:not(.farma-sidebar-ready){visibility:hidden!important;}'; document.head.appendChild(style);
-})();
+(function installSidebarPreloadGuard(){if(document.getElementById('farmaSidebarPreloadGuard'))return;const style=document.createElement('style');style.id='farmaSidebarPreloadGuard';style.textContent='body.has-sidebar:not(.farma-sidebar-ready){visibility:hidden!important;}';document.head.appendChild(style);})();
 async function sleep(ms){return new Promise(resolve=>setTimeout(resolve,ms));}
 let farmaRedirectingToLogin=false,farmaLastKnownSession=null,farmaLastKnownProfile=null;
 try{const cachedProfile=localStorage.getItem('farma-profile-cache');if(cachedProfile)farmaLastKnownProfile=JSON.parse(cachedProfile);}catch(err){console.warn('Could not restore cached profile:',err);}
@@ -43,3 +32,4 @@ document.addEventListener('DOMContentLoaded',()=>{if(!/users\.html$/i.test(locat
 document.addEventListener('DOMContentLoaded',async()=>{if(!/attendance\.html$/i.test(location.pathname))return;const a=await requireAuth();if(a)guardPageAccess(a.profile,'attendance');});
 (function loadInventoryEnhancements(){if(!/(^|\/)inventory\.html$/i.test(window.location.pathname))return;if(document.getElementById('farmaInventoryEnhancements'))return;const script=document.createElement('script');script.id='farmaInventoryEnhancements';script.src='inventory-enhancements.js?v=1';document.head.appendChild(script);})();
 (function installCairoSalesDateFix(){if(!/(^|\/)sales\.html$/i.test(location.pathname))return;const cairoParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const getPart=type=>cairoParts.find(p=>p.type===type)?.value||'';const cairoToday={year:Number(getPart('year')),month:Number(getPart('month')),day:Number(getPart('day'))};const cairoStartIso=(year,month,day)=>new Date(Date.UTC(year,month-1,day,0,0,0)-(3*60*60*1000)).toISOString();const shiftCairoDate=(year,month,day,deltaDays)=>{const d=new Date(Date.UTC(year,month-1,day));d.setUTCDate(d.getUTCDate()+deltaDays);return{year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate()};};const originalGetRangeStart=window.getRangeStart;setTimeout(()=>{window.getRangeStart=function(range){if(range==='today')return cairoStartIso(cairoToday.year,cairoToday.month,cairoToday.day);if(range==='week'){const start=shiftCairoDate(cairoToday.year,cairoToday.month,cairoToday.day,-7);return cairoStartIso(start.year,start.month,start.day);}if(range==='month'){const start=new Date(Date.UTC(cairoToday.year,cairoToday.month-1,cairoToday.day));start.setUTCMonth(start.getUTCMonth()-1);return cairoStartIso(start.getUTCFullYear(),start.getUTCMonth()+1,start.getUTCDate());}return typeof originalGetRangeStart==='function'?originalGetRangeStart(range):null;};if(typeof window.loadRecentSales==='function')window.loadRecentSales();},0);})();
+(function loadAttendanceAdminFix(){if(!/attendance\.html$/i.test(location.pathname))return;const script=document.createElement('script');script.src='attendance-admin-fix.js?v=2';script.async=false;document.head.appendChild(script);})();
