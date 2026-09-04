@@ -37,18 +37,14 @@
     return Array.from(document.querySelectorAll('.' + className + ':checked')).map(c => c.value);
   }
 
-  // The original inventory page has "أمبول" as a built-in dosage form.
-  // Keep it available even if a later UI enhancement rebuilds the select options.
   function ensureAmpouleOption() {
     const select = document.getElementById('p_shape');
     if (!select) return;
-
     const exists = Array.from(select.options).some(option =>
       option.value === AMPoule_VALUE ||
       String(option.textContent || '').trim() === 'أمبول' ||
       String(option.textContent || '').trim() === 'امبول'
     );
-
     if (!exists) {
       const option = document.createElement('option');
       option.value = AMPoule_VALUE;
@@ -91,7 +87,6 @@
       (h.textContent || '').includes('المخزون الحالي')
     );
     if (!stockTitle) return;
-
     let box = document.getElementById('inventoryCountSummary');
     if (!box) {
       box = document.createElement('div');
@@ -99,7 +94,6 @@
       box.style.cssText = 'margin:0 0 12px;padding:10px 14px;border:1px solid #dfe7e3;border-radius:10px;background:#f7faf8;font-size:13px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;';
       stockTitle.insertAdjacentElement('afterend', box);
     }
-
     const table = document.querySelector('#tableWrap table');
     const visible = table ? table.querySelectorAll('tbody tr').length : 0;
     box.innerHTML =
@@ -114,14 +108,12 @@
     const type = selected('typeChk');
     const cls = selected('classChk');
     const avail = selected('availChk');
-
     return source.filter(p => {
       if (term && typeof window.fuzzyIncludes === 'function' &&
           !window.fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term)) return false;
       if (shape.length && !shape.includes(isBlank(p.shape) ? UNCLASSIFIED : p.shape)) return false;
       if (type.length && !type.includes(isBlank(p.drug_type) ? UNCLASSIFIED : p.drug_type)) return false;
       if (cls.length && !cls.includes(isBlank(p.classification) ? UNCLASSIFIED : p.classification)) return false;
-
       if (avail.length && typeof window.getAvailabilityState === 'function') {
         const state = window.getAvailabilityState(p);
         const ok = (avail.includes('available') && state.available) ||
@@ -136,11 +128,9 @@
   function rerender() {
     if (rendering || typeof window.renderInventoryTable !== 'function') return;
     rendering = true;
-
     const search = document.getElementById('searchBox')?.value || '';
     const originalCache = window._productsCache || [];
     const filteredCache = getExtraFilteredProducts();
-
     try {
       window._productsCache = filteredCache;
       withTemporaryUnclassifiedMarkers(filteredCache, () => window.renderInventoryTable(search));
@@ -148,7 +138,6 @@
       window._productsCache = originalCache;
       rendering = false;
     }
-
     ensureAmpouleOption();
     updateAllFilterCounts();
     updateHeaderCount(originalCache.length);
@@ -158,7 +147,6 @@
   function appendUnclassified(boxId, groupClass, labelText) {
     const box = document.getElementById(boxId);
     if (!box || box.querySelector('input.' + groupClass + '[value="' + UNCLASSIFIED + '"]')) return;
-
     const label = document.createElement('label');
     label.setAttribute('data-unclassified', '1');
     label.innerHTML =
@@ -183,12 +171,10 @@
   function buildExtraFilter(boxId, summaryId, groupClass, field, title) {
     const box = document.getElementById(boxId);
     if (!box) return;
-
     const stateKey = field === 'active_ingredient' ? 'ingredient' : field;
     const previous = new Set(extraState[stateKey]);
     const values = unique((window._productsCache || []).map(p => p[field]));
     box.innerHTML = '';
-
     [UNCLASSIFIED, ...values].forEach(value => {
       const label = document.createElement('label');
       const checked = previous.has(value) ? ' checked' : '';
@@ -198,7 +184,6 @@
         '<span class="filter-option-count" data-filter-group="' + groupClass + '" data-filter-value="' + esc(value) + '">(0)</span>';
       box.appendChild(label);
     });
-
     box.querySelectorAll('input').forEach(chk => {
       chk.addEventListener('change', () => {
         extraState[stateKey] = selected(groupClass);
@@ -208,7 +193,6 @@
         rerender();
       });
     });
-
     const details = box.closest('details');
     if (details) details.querySelector('summary').firstChild.textContent = title + ' ';
   }
@@ -227,13 +211,11 @@
   function addExtraFilterDetails() {
     const toolbar = document.querySelector('.inventory-toolbar');
     if (!toolbar || document.getElementById('filterIngredientPanel')) return;
-
     const definitions = [
       ['filterSupplierPanel', 'filterSupplierBox', 'filterSupplierCount', 'المورد'],
       ['filterIngredientPanel', 'filterIngredientBox', 'filterIngredientCount', 'المادة الفعالة'],
       ['filterConcentrationPanel', 'filterConcentrationBox', 'filterConcentrationCount', 'التركيز']
     ];
-
     const exportBtn = document.getElementById('exportBtn');
     definitions.forEach(([panelId, boxId, countId, title]) => {
       const details = document.createElement('details');
@@ -247,7 +229,6 @@
   function addSortControl() {
     const toolbar = document.querySelector('.inventory-toolbar');
     if (!toolbar || document.getElementById('inventorySort')) return;
-
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;align-items:center;gap:6px;min-width:190px;';
     wrap.innerHTML =
@@ -259,11 +240,9 @@
         '<option value="en_desc">الاسم الإنجليزي: Z → A</option>' +
         '<option value="created_desc">الأحدث</option>' +
       '</select>';
-
     const search = document.getElementById('searchBox');
     if (search) search.insertAdjacentElement('afterend', wrap);
     else toolbar.prepend(wrap);
-
     const select = wrap.querySelector('select');
     select.value = localStorage.getItem('farmaInventorySort') || 'ar_asc';
     select.addEventListener('change', e => {
@@ -276,14 +255,12 @@
     if (window.__farmaCreatedAtSortInstalled) return;
     if (typeof window.renderInventoryTable !== 'function') return;
     window.__farmaCreatedAtSortInstalled = true;
-
     const originalRender = window.renderInventoryTable;
     window.renderInventoryTable = function(searchText) {
       const select = document.getElementById('inventorySort');
       if (!select || select.value !== 'created_desc') {
         return originalRender(searchText);
       }
-
       const cache = window._productsCache || [];
       const sorted = [...cache].sort((a, b) => {
         const ta = Date.parse(a?.created_at || '') || 0;
@@ -291,10 +268,9 @@
         if (tb !== ta) return tb - ta;
         return String(b?.id || '').localeCompare(String(a?.id || ''));
       });
-
       window._productsCache = sorted;
       const previous = select.value;
-      select.value = 'ar_asc';
+      select.value = 'none';
       try {
         return originalRender(searchText);
       } finally {
@@ -313,7 +289,6 @@
   function installFilterInterception() {
     if (document.documentElement.dataset.farmaInventoryFilterInterceptor === '1') return;
     document.documentElement.dataset.farmaInventoryFilterInterceptor = '1';
-
     document.addEventListener('change', e => {
       const target = e.target;
       if (!target || target.type !== 'checkbox') return;
@@ -355,7 +330,6 @@
     if (initialized) return;
     if (typeof window.renderInventoryTable !== 'function') return;
     if (!document.getElementById('filterShapeBox') || !window._productsCache) return;
-
     initialized = true;
     ensureAmpouleOption();
     addSortControl();
@@ -364,12 +338,10 @@
     addUnclassifiedOptions();
     observeFilterRebuilds();
     installFilterInterception();
-
     buildExtraFilter('filterSupplierBox', 'filterSupplierCount', 'supplierChk', 'supplier', 'المورد');
     buildExtraFilter('filterIngredientBox', 'filterIngredientCount', 'ingredientChk', 'active_ingredient', 'المادة الفعالة');
     buildExtraFilter('filterConcentrationBox', 'filterConcentrationCount', 'concentrationChk', 'concentration', 'التركيز');
     extraSignature = (window._productsCache || []).map(p => [p.id, p.supplier || '', p.active_ingredient || '', p.concentration || ''].join('|')).join('§');
-
     const search = document.getElementById('searchBox');
     if (search) {
       search.addEventListener('input', e => {
@@ -377,7 +349,6 @@
         rerender();
       }, true);
     }
-
     const tableWrap = document.getElementById('tableWrap');
     if (tableWrap) {
       new MutationObserver(() => {
@@ -388,7 +359,6 @@
         updateExtraCounts();
       }).observe(tableWrap, { childList: true, subtree: true });
     }
-
     setTimeout(() => {
       refreshExtraFiltersIfNeeded();
       addUnclassifiedOptions();
