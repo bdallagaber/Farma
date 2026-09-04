@@ -32,3 +32,41 @@ document.addEventListener('DOMContentLoaded',()=>{if(!/users\.html$/i.test(locat
 document.addEventListener('DOMContentLoaded',async()=>{if(!/attendance\.html$/i.test(location.pathname))return;const a=await requireAuth();if(a)guardPageAccess(a.profile,'attendance');});
 (function loadInventoryEnhancements(){if(!/(^|\/)inventory\.html$/i.test(location.pathname))return;if(document.getElementById('farmaInventoryEnhancements'))return;const script=document.createElement('script');script.id='farmaInventoryEnhancements';script.src='inventory-enhancements.js?v=1';document.head.appendChild(script);})();
 (function installCairoSalesDateFix(){if(!/(^|\/)sales\.html$/i.test(location.pathname))return;const cairoParts=new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date());const getPart=type=>cairoParts.find(p=>p.type===type)?.value||'';const cairoToday={year:Number(getPart('year')),month:Number(getPart('month')),day:Number(getPart('day'))};const cairoStartIso=(year,month,day)=>new Date(Date.UTC(year,month-1,day,0,0,0)-(3*60*60*1000)).toISOString();const shiftCairoDate=(year,month,day,deltaDays)=>{const d=new Date(Date.UTC(year,month-1,day));d.setUTCDate(d.getUTCDate()+deltaDays);return{year:d.getUTCFullYear(),month:d.getUTCMonth()+1,day:d.getUTCDate()};};const originalGetRangeStart=window.getRangeStart;setTimeout(()=>{window.getRangeStart=function(range){if(range==='today')return cairoStartIso(cairoToday.year,cairoToday.month,cairoToday.day);if(range==='week'){const start=shiftCairoDate(cairoToday.year,cairoToday.month,cairoToday.day,-7);return cairoStartIso(start.year,start.month,start.day);}if(range==='month'){const start=new Date(Date.UTC(cairoToday.year,cairoToday.month-1,cairoToday.day));start.setUTCMonth(start.getUTCMonth()-1);return cairoStartIso(start.getUTCFullYear(),start.getUTCMonth()+1,start.getUTCDate());}return typeof originalGetRangeStart==='function'?originalGetRangeStart(range):null;};if(typeof window.loadRecentSales==='function')window.loadRecentSales();},0);})();
+
+// إضافة الصلاحيات الناقصة في صفحة المستخدمين بدون تغيير منطق الصفحة أو استبدال دوالها.
+document.addEventListener('DOMContentLoaded',()=>{
+  if(!/users\.html$/i.test(location.pathname))return;
+  const addPermission=(container,value,labelText)=>{
+    if(!container||container.querySelector('.pageChk[value="'+value+'"]'))return;
+    const label=document.createElement('label');
+    label.style.cssText='display:flex;align-items:center;gap:6px;font-size:13px;';
+    label.innerHTML='<input type="checkbox" class="pageChk" value="'+value+'" style="width:auto;margin:0;"> '+labelText;
+    container.appendChild(label);
+  };
+  const wrap=document.getElementById('pagesWrap');
+  const container=wrap&& (wrap.querySelector('div[style*="flex-wrap"]')||wrap.lastElementChild);
+  addPermission(container,'invoices','الفواتير');
+  addPermission(container,'attendance','الحضور والانصراف');
+
+  const observer=new MutationObserver(()=>{
+    const modal=document.getElementById('permModal');
+    if(!modal||modal.dataset.farmaExtraPermissions==='1')return;
+    modal.dataset.farmaExtraPermissions='1';
+    const button=modal.querySelector('button[onclick*="savePermissions"]');
+    if(!button)return;
+    const makeModalPermission=(value,labelText)=>{
+      if(modal.querySelector('.permChk[value="'+value+'"]'))return;
+      const label=document.createElement('label');
+      label.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;';
+      const input=document.createElement('input');
+      input.type='checkbox';input.className='permChk';input.value=value;input.style.cssText='width:auto;margin:0;';
+      label.appendChild(input);label.appendChild(document.createTextNode(' '+labelText));
+      button.parentNode.insertBefore(label,button);
+    };
+    const current=((window._usersCache||[]).find(x=>x.id===modal.querySelector('button[onclick*="savePermissions"]')?.getAttribute('onclick')?.match(/savePermissions\\\('(.*?)'\\\)/)?.[1])||{}).allowed_pages||[];
+    makeModalPermission('invoices','الفواتير');
+    makeModalPermission('attendance','الحضور والانصراف');
+    modal.querySelectorAll('.permChk').forEach(input=>{if(current.includes(input.value))input.checked=true;});
+  });
+  observer.observe(document.body,{childList:true,subtree:true});
+});
