@@ -1,7 +1,7 @@
 /* ============================================================
-   Farma - Online barcode product lookup
+   Farma - Online product lookup
    Source: DwaPrices API via Supabase Edge Function
-   Flow: barcode -> DwaPrices -> autofill form -> user review -> save
+   Flow: barcode / Arabic name / English name -> DwaPrices -> autofill -> user review -> save
 ============================================================ */
 (function () {
   'use strict';
@@ -10,15 +10,13 @@
 
   const FUNCTION_NAME = 'lookup-drug-barcode';
   let lookupTimer = null;
-  let lastBarcode = '';
+  let lastQuery = '';
   let requestInFlight = false;
 
-  function get(id) {
-    return document.getElementById(id);
-  }
+  function get(id) { return document.getElementById(id); }
 
-  function cleanBarcode(value) {
-    return String(value || '').trim().replace(/\s+/g, '');
+  function cleanQuery(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ');
   }
 
   function isEditing() {
@@ -28,14 +26,12 @@
   function ensureStatus() {
     let el = get('barcodeLookupStatus');
     if (el) return el;
-
-    const input = get('p_qr');
-    if (!input || !input.parentElement || !input.parentElement.parentElement) return null;
-
+    const anchor = get('p_name') || get('p_qr');
+    if (!anchor || !anchor.parentElement) return null;
     el = document.createElement('div');
     el.id = 'barcodeLookupStatus';
     el.style.cssText = 'margin-top:8px;padding:9px 12px;border-radius:8px;font-size:12px;display:none;line-height:1.6;';
-    input.parentElement.parentElement.appendChild(el);
+    anchor.parentElement.appendChild(el);
     return el;
   }
 
@@ -54,16 +50,15 @@
     if (!select || value == null || String(value).trim() === '') return false;
     const wanted = String(value).trim();
     let option = Array.from(select.options).find(o => String(o.value).trim() === wanted);
-
     if (!option && addIfMissing) {
       option = document.createElement('option');
       option.value = wanted;
       option.textContent = wanted;
       select.appendChild(option);
     }
-
     if (!option) return false;
     select.value = wanted;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
     return true;
   }
 
@@ -106,6 +101,7 @@
     const price = parsePrice(data.default_sale_price);
     const shape = normalizeDosageForm(data.shape || '');
     const classification = data.classification || '';
+    const drugType = data.drug_type || '';
     const company = data.manufacturer || '';
 
     if (name) setInput('p_name', name);
@@ -113,6 +109,8 @@
     if (active) setInput('p_active_ingredient', active);
     if (concentration) setInput('p_concentration', concentration);
     if (price) setInput('p_box_price', price);
+    if (data.barcode) setInput('p_qr', data.barcode);
+    if (drugType) setSelectValue('p_drug_type', drugType, true);
 
     if (shape) {
       const shapeSelect = get('p_shape');
@@ -134,87 +132,98 @@
     }
 
     if (classification) setSelectValue('p_classification', classification, true);
-
-    // DwaPrices gives the manufacturer, while Farma's field is specifically "المورد".
-    // Only use it when that exact supplier already exists; otherwise leave the supplier untouched.
     if (company) setSelectValue('p_supplier', company, false);
 
     const priceNote = price ? ' السعر المقترح: ' + price + ' ج.' : '';
     setStatus('تم العثور على المنتج من DwaPrices وتم ملء البيانات تلقائيًا. راجع البيانات قبل الحفظ.' + priceNote, 'ok');
   }
 
-  async function lookupBarcode(barcode) {
-    if (!barcode || requestInFlight || isEditing()) return;
+  async function lookup(query, mode) {
+    if (!query || requestInFlight || isEditing()) return;
     requestInFlight = true;
-    setStatus('🔎 جاري البحث عن الباركود على الإنترنت...', 'info');
-
+    setStatus('🔎 جاري البحث عن الدواء على الإنترنت...', 'info');
     try {
-      const { data, error } = await sb.functions.invoke(FUNCTION_NAME, {
-        body: { barcode }
-      });
-
+      const { data, error } = await sb.functions.invoke(FUNCTION_NAME, { body: { query } });
       if (error) throw error;
 
       if (!data || data.found !== true || !data.data) {
-        setStatus('لم يتم العثور على المنتج بهذا الباركود في DwaPrices. يمكنك إدخال البيانات يدويًا.', 'error');
+        if (data?.multiple) {
+          setStatus('تم العثور على أكثر من منتج بهذا الاسم. اكتب الاسم كاملًا، ويفضل إضافة التركيز مثل 500 mg، لتحديد المنتج الصحيح.', 'error');
+        } else {
+          setStatus('لم يتم العثور على المنتج في DwaPrices. يمكنك إدخال البيانات يدويًا.', 'error');
+        }
         return;
       }
-
       applyProduct(data.data);
     } catch (err) {
-      console.error('DwaPrices barcode lookup failed:', err);
+      console.error('DwaPrices product lookup failed:', err);
       setStatus('تعذّر البحث عن بيانات المنتج الآن. يمكنك إكمال الإضافة يدويًا.', 'error');
     } finally {
       requestInFlight = false;
     }
   }
 
-  function scheduleLookup() {
-    const input = get('p_qr');
+  function scheduleLookup(input, mode) {
     if (!input || isEditing()) return;
-    const barcode = cleanBarcode(input.value);
-    if (!barcode || barcode === lastBarcode) return;
-
+    const query = cleanQuery(input.value);
+    const minimum = mode === 'barcode' ? 6 : 3;
+    if (!query || query.length < minimum || query === lastQuery) return;
     clearTimeout(lookupTimer);
     lookupTimer = setTimeout(() => {
-      const latest = cleanBarcode(input.value);
-      if (!latest || latest !== barcode || isEditing()) return;
-      lastBarcode = latest;
-      lookupBarcode(latest);
-    }, 450);
+      const latest = cleanQuery(input.value);
+      if (!latest || latest !== query || latest.length < minimum || isEditing()) return;
+      lastQuery = latest;
+      lookup(latest, mode);
+    }, mode === 'barcode' ? 450 : 800);
+  }
+
+  function watchInput(id, mode) {
+    const input = get(id);
+    if (!input || input.dataset.farmaOnlineLookup === '1') return;
+    input.dataset.farmaOnlineLookup = '1';
+    input.addEventListener('input', () => scheduleLookup(input, mode));
+    input.addEventListener('change', () => scheduleLookup(input, mode));
+    input.addEventListener('blur', () => scheduleLookup(input, mode));
+    return input;
   }
 
   function watchScannerChanges() {
     const input = get('p_qr');
     if (!input) return;
-
-    input.addEventListener('input', scheduleLookup);
-    input.addEventListener('change', scheduleLookup);
-    input.addEventListener('blur', scheduleLookup);
-
-    // The existing camera scanner writes directly to .value, so there is no input event.
     setInterval(() => {
       if (isEditing()) return;
-      const value = cleanBarcode(input.value);
-      if (value && value !== lastBarcode && value.length >= 6) scheduleLookup();
-      if (!value) lastBarcode = '';
+      const value = cleanQuery(input.value);
+      if (value && value.length >= 6 && value !== lastQuery) scheduleLookup(input, 'barcode');
+      if (!value && lastQuery && /^\d+$/.test(lastQuery)) lastQuery = '';
     }, 500);
   }
 
-  function addHint() {
-    const input = get('p_qr');
-    if (!input) return;
-    input.setAttribute('autocomplete', 'off');
-    input.setAttribute('inputmode', 'numeric');
-    input.placeholder = 'اكتب الباركود وسيتم البحث أونلاين تلقائيًا';
+  function addHints() {
+    const qr = get('p_qr');
+    const name = get('p_name');
+    const nameEn = get('p_name_en');
+    if (qr) {
+      qr.setAttribute('autocomplete', 'off');
+      qr.setAttribute('inputmode', 'numeric');
+      qr.placeholder = 'الباركود أو امسحه بالكاميرا';
+    }
+    if (name) name.placeholder = name.placeholder || 'اكتب الاسم العربي للبحث أونلاين';
+    if (nameEn) nameEn.placeholder = nameEn.placeholder || 'اكتب الاسم الإنجليزي للبحث أونلاين';
     ensureStatus();
   }
 
   function boot() {
-    if (!get('p_qr') || typeof sb === 'undefined') return false;
-    if (document.documentElement.dataset.farmaBarcodeLookup === '1') return true;
-    document.documentElement.dataset.farmaBarcodeLookup = '1';
-    addHint();
+    if (typeof sb === 'undefined') return false;
+    if (document.documentElement.dataset.farmaOnlineDrugLookup === '1') return true;
+    const qr = get('p_qr');
+    const name = get('p_name');
+    const nameEn = get('p_name_en');
+    if (!qr && !name && !nameEn) return false;
+    document.documentElement.dataset.farmaOnlineDrugLookup = '1';
+    addHints();
+    watchInput('p_qr', 'barcode');
+    watchInput('p_name', 'name');
+    watchInput('p_name_en', 'name');
     watchScannerChanges();
     return true;
   }
