@@ -51,3 +51,13 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   observer.observe(document.body,{childList:true,subtree:true});
 });
+
+// الأدمن يسجل حضوره وانصرافه بنفس واجهة الموظف، مع بقاء لوحة الإدارة متاحة له.
+document.addEventListener('DOMContentLoaded',async()=>{
+  if(!/attendance\.html$/i.test(location.pathname))return;
+  if(farmaLastKnownProfile?.role!=='admin')return;
+  const panel=document.getElementById('employeePanel');
+  if(!panel)return;
+  panel.classList.remove('hidden');
+  if(typeof loadToday==='function')await loadToday();
+});
