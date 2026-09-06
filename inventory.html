@@ -27,47 +27,77 @@
 </main>
 <script src="config.js"></script>
 <script>
-let page=0;const PAGE_SIZE=50;let timer=null;
+let page=0;const PAGE_SIZE=50;let timer=null;let allProducts=[];let loading=false;
 const $=id=>document.getElementById(id);
 const esc=s=>{const d=document.createElement('div');d.textContent=s??'';return d.innerHTML};
+const norm=s=>String(s??'').toLowerCase().replace(/[\s\-_./()]+/g,'').trim();
 function opts(id,values,first){const el=$(id);el.innerHTML='<option value="">'+first+'</option>'+[...new Set(values.filter(Boolean).map(String))].sort((a,b)=>a.localeCompare(b,'ar')).map(v=>'<option value="'+esc(v)+'">'+esc(v)+'</option>').join('')}
 async function loadOptions(){const {data,error}=await sb.from('custom_options').select('category,value').order('value');if(error)return;const m={drug_shape:[],drug_type:[],classification:[],supplier:[]};(data||[]).forEach(x=>{if(m[x.category])m[x.category].push(x.value)});opts('shape',m.drug_shape,'كل الأشكال');opts('type',m.drug_type,'كل الأنواع');opts('classification',m.classification,'كل التصنيفات');opts('supplier',m.supplier,'كل الموردين')}
 function escLike(v){return String(v).replace(/[(),]/g,' ').trim()}
 function getInvQty(p){const r=p?.inventory;if(Array.isArray(r))return Number(r[0]?.quantity_smallest_unit||0);if(r&&typeof r==='object')return Number(r.quantity_smallest_unit||0);return Number(p?._inventoryQuantity||0)}
-function formatQty(p){
- const qty=getInvQty(p);
- // Keep the exact quantity decomposition logic used by the pre-performance version.
- const per=p.unit_large?(Number(p.unit_large_to_medium)||1)*(Number(p.unit_medium_to_small)||1):(Number(p.unit_medium_to_small)||1);
- const boxes=per?Math.floor(qty/per):qty;
- const rem=per?qty%per:0;
- const low=qty<=Number(p.min_stock_threshold||0);
- let qtyText=boxes+' علبة';
- if(p.unit_large&&rem){
-   const med=Math.floor(rem/(Number(p.unit_medium_to_small)||1));
-   const small=rem%(Number(p.unit_medium_to_small)||1);
-   if(med)qtyText+=' + '+med+' '+(p.unit_medium==='strip'?'شريط':p.unit_medium==='ampoule'?'أمبولة':p.unit_medium==='sachet'?'كيس':'وحدة');
-   if(small)qtyText+=' + '+small+' '+(p.unit_small==='piece'?'قطعة':p.unit_small==='other'?(p.other_note||'وحدة'):'وحدة');
- }else if(rem)qtyText+=' + '+rem+' '+(p.unit_small==='piece'?'قطعة':p.unit_small==='other'?(p.other_note||'وحدة'):'وحدة');
- return {qtyText,low};
+function formatQty(p,qtyOverride){const qty=Number.isFinite(Number(qtyOverride))?Number(qtyOverride):getInvQty(p);const per=p.unit_large?(Number(p.unit_large_to_medium)||1)*(Number(p.unit_medium_to_small)||1):(Number(p.unit_medium_to_small)||1);const boxes=per?Math.floor(qty/per):qty;const rem=per?qty%per:0;const low=qty<=Number(p.min_stock_threshold||0);let qtyText=boxes+' علبة';if(p.unit_large&&rem){const med=Math.floor(rem/(Number(p.unit_medium_to_small)||1));const small=rem%(Number(p.unit_medium_to_small)||1);if(med)qtyText+=' + '+med+' '+(p.unit_medium==='strip'?'شريط':p.unit_medium==='ampoule'?'أمبولة':p.unit_medium==='sachet'?'كيس':'وحدة');if(small)qtyText+=' + '+small+' '+(p.unit_small==='piece'?'قطعة':p.unit_small==='other'?(p.other_note||'وحدة'):'وحدة')}else if(rem)qtyText+=' + '+rem+' '+(p.unit_small==='piece'?'قطعة':p.unit_small==='other'?(p.other_note||'وحدة'):'وحدة');return {qtyText,low}}
+function identityKey(p){
+ const en=String(p.name_en||'').trim();
+ const name=String(p.name||'').trim();
+ const candidate=en||(/[A-Za-z]/.test(name)?name:'');
+ if(!/[A-Za-z]/.test(candidate))return '';
+ const key=norm(candidate);
+ if(key.length<4)return '';
+ const expiry=p.expiry_date||'';
+ const price=p.default_sale_price==null?'':String(p.default_sale_price);
+ const units=[p.unit_large,p.unit_large_to_medium,p.unit_medium,p.unit_medium_to_small,p.unit_small,p.other_note].map(v=>String(v??'')).join('|');
+ return key+'|'+expiry+'|'+price+'|'+units;
 }
+function mergeDuplicateProducts(rows){
+ const groups=new Map();
+ for(const p of rows){const key=identityKey(p);if(!key){groups.set('__single__'+p.id,[p]);continue}if(!groups.has(key))groups.set(key,[]);groups.get(key).push(p)}
+ const out=[];
+ for(const group of groups.values()){
+   if(group.length===1){out.push(group[0]);continue}
+   const qty=group.reduce((s,p)=>s+getInvQty(p),0);
+   const canonical=[...group].sort((a,b)=>{
+     const aq=getInvQty(a),bq=getInvQty(b);
+     const aa=/[\u0600-\u06ff]/.test(a.name||'')?1:0;
+     const ba=/[\u0600-\u06ff]/.test(b.name||'')?1:0;
+     return (bq-aq)||(ba-aa);
+   })[0];
+   canonical._inventoryQuantity=qty;
+   canonical._duplicateSourceIds=group.map(p=>p.id);
+   canonical._duplicateCount=group.length;
+   out.push(canonical);
+ }
+ return out;
+}
+function filteredProducts(){
+ const term=$('search').value.trim();
+ return allProducts.filter(p=>{
+   if($('shape').value&&p.shape!==$('shape').value)return false;
+   if($('type').value&&p.drug_type!==$('type').value)return false;
+   if($('classification').value&&p.classification!==$('classification').value)return false;
+   if($('supplier').value&&p.supplier!==$('supplier').value)return false;
+   if(!term)return true;
+   const hay=(p.name||'')+' '+(p.name_en||'')+' '+(p.qr_code||'');
+   return hay.toLowerCase().includes(term.toLowerCase())||fuzzy(hay,term);
+ });
+}
+function fuzzy(h,t){const words=String(t).trim().split(/\s+/).filter(Boolean);const nh=String(h).toLowerCase().replace(/\s+/g,'');return words.length>1?words.every(w=>nh.includes(w.toLowerCase().replace(/\s+/g,''))):false}
 async function load(){
- const wrap=$('tableWrap');wrap.innerHTML='<p class="loading">جاري التحميل...</p>';
- const term=$('search').value.trim();let q=sb.from('products').select('id,name,name_en,shape,drug_type,classification,supplier,expiry_date,default_sale_price,qr_code,unit_large,unit_large_to_medium,unit_medium_to_small,unit_medium,unit_small,other_note,min_stock_threshold,inventory(quantity_smallest_unit)',{count:'exact'}).order('name',{ascending:true}).range(page*PAGE_SIZE,(page+1)*PAGE_SIZE-1);
- if(term){const safe=escLike(term);q=q.or('name.ilike.%'+safe+'%,name_en.ilike.%'+safe+'%,qr_code.ilike.%'+safe+'%')}
- if($('shape').value)q=q.eq('shape',$('shape').value);if($('type').value)q=q.eq('drug_type',$('type').value);if($('classification').value)q=q.eq('classification',$('classification').value);if($('supplier').value)q=q.eq('supplier',$('supplier').value);
- const {data,error,count}=await q;if(error){wrap.innerHTML='<p class="msg error">تعذر تحميل المنتجات: '+esc(error.message)+'</p>';return}
- const products=data||[];
- // Read the authoritative inventory row separately for only the 50 visible products.
- const ids=products.map(p=>p.id).filter(Boolean);
- if(ids.length){const {data:invRows}=await sb.from('inventory').select('product_id,quantity_smallest_unit').in('product_id',ids);const map=new Map((invRows||[]).map(r=>[r.product_id,r.quantity_smallest_unit]));products.forEach(p=>{if(map.has(p.id))p._inventoryQuantity=map.get(p.id)})}
- $('resultInfo').textContent=(count??0)+' منتج';
- if(!products.length){wrap.innerHTML='<p class="loading">لا توجد نتائج مطابقة</p>';renderPager(count||0);return}
- let html='<div style="overflow:auto"><table><thead><tr><th>المنتج</th><th>الشكل</th><th>الكمية</th><th>السعر</th><th>الصلاحية</th><th>إجراء</th></tr></thead><tbody>';
- for(const p of products){const f=formatQty(p);html+='<tr><td>'+esc(p.name)+'</td><td>'+esc(p.shape==='أخرى'&&p.other_note?p.other_note:p.shape||'—')+'</td><td class="'+(f.low?'low-stock':'')+'">'+esc(f.qtyText)+(f.low?' ⚠️':'')+'</td><td>'+esc(p.default_sale_price==null?'—':p.default_sale_price+' ج')+'</td><td>'+esc(p.expiry_date||'—')+'</td><td><a class="small secondary" style="text-decoration:none" href="inventory-form.html?id='+encodeURIComponent(p.id)+'">تعديل</a></td></tr>'}
- wrap.innerHTML=html+'</tbody></table></div>';renderPager(count||0)
+ if(loading)return;loading=true;const wrap=$('tableWrap');wrap.innerHTML='<p class="loading">جاري تحميل المخزون...</p>';
+ const {data,error}=await sb.from('products').select('id,name,name_en,shape,drug_type,classification,supplier,expiry_date,default_sale_price,qr_code,unit_large,unit_large_to_medium,unit_medium_to_small,unit_medium,unit_small,other_note,min_stock_threshold,inventory(quantity_smallest_unit)').order('name',{ascending:true}).limit(1200);
+ if(error){wrap.innerHTML='<p class="msg error">تعذر تحميل المنتجات: '+esc(error.message)+'</p>';loading=false;return}
+ allProducts=mergeDuplicateProducts(data||[]);
+ loading=false;page=0;render();
 }
-function renderPager(total){const pages=Math.max(1,Math.ceil(total/PAGE_SIZE));$('pager').innerHTML='<button class="small secondary" '+(page===0?'disabled':'')+' id="prev">السابق</button><span>صفحة '+(page+1)+' من '+pages+'</span><button class="small secondary" '+(page>=pages-1?'disabled':'')+' id="next">التالي</button>';$('prev').onclick=()=>{if(page){page--;load()}};$('next').onclick=()=>{if(page<pages-1){page++;load()}}}
-['shape','type','classification','supplier'].forEach(id=>$(id).addEventListener('change',()=>{page=0;load()}));$('search').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{page=0;load()},250)});
+function render(){
+ const rows=filteredProducts();$('resultInfo').textContent=rows.length+' منتج';
+ const pages=Math.max(1,Math.ceil(rows.length/PAGE_SIZE));if(page>=pages)page=pages-1;const visible=rows.slice(page*PAGE_SIZE,(page+1)*PAGE_SIZE);
+ if(!visible.length){$('tableWrap').innerHTML='<p class="loading">لا توجد نتائج مطابقة</p>';renderPager(rows.length);return}
+ let html='<div style="overflow:auto"><table><thead><tr><th>المنتج</th><th>الشكل</th><th>الكمية</th><th>السعر</th><th>الصلاحية</th><th>إجراء</th></tr></thead><tbody>';
+ for(const p of visible){const f=formatQty(p);const duplicateNote=p._duplicateCount>1?' <small style="opacity:.7">('+p._duplicateCount+' سجلات)</small>':'';html+='<tr><td>'+esc(p.name)+duplicateNote+'</td><td>'+esc(p.shape==='أخرى'&&p.other_note?p.other_note:p.shape||'—')+'</td><td class="'+(f.low?'low-stock':'')+'">'+esc(f.qtyText)+(f.low?' ⚠️':'')+'</td><td>'+esc(p.default_sale_price==null?'—':p.default_sale_price+' ج')+'</td><td>'+esc(p.expiry_date||'—')+'</td><td><a class="small secondary" style="text-decoration:none" href="inventory-form.html?id='+encodeURIComponent(p.id)+'">تعديل</a></td></tr>'}
+ $('tableWrap').innerHTML=html+'</tbody></table></div>';renderPager(rows.length);
+}
+function renderPager(total){const pages=Math.max(1,Math.ceil(total/PAGE_SIZE));$('pager').innerHTML='<button class="small secondary" '+(page===0?'disabled':'')+' id="prev">السابق</button><span>صفحة '+(page+1)+' من '+pages+'</span><button class="small secondary" '+(page>=pages-1?'disabled':'')+' id="next">التالي</button>';$('prev').onclick=()=>{if(page){page--;render()}};$('next').onclick=()=>{if(page<pages-1){page++;render()}}}
+['shape','type','classification','supplier'].forEach(id=>$(id).addEventListener('change',()=>{page=0;render()}));$('search').addEventListener('input',()=>{clearTimeout(timer);timer=setTimeout(()=>{page=0;render()},180)});
 (async()=>{const a=await requireAuth();if(!a)return;if(!guardPageAccess(a.profile,'inventory'))return;$('userinfo').textContent=a.profile.full_name+' ('+(a.profile.role==='admin'?'أدمن':'موظف')+')';await loadOptions();await load()})();
 $('logoutBtn').onclick=async()=>{await sb.auth.signOut();location.href='index.html'};
 </script>
