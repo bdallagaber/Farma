@@ -17,6 +17,7 @@
   let initialized = false;
   let rendering = false;
   let extraSignature = '';
+  let allProductsLoaded = false;
 
   function esc(value) {
     const div = document.createElement('div');
@@ -326,6 +327,46 @@
     });
   }
 
+  async function loadAllProducts() {
+    if (allProductsLoaded) return;
+    if (!window.sb) return;
+
+    const select = 'id, name, name_en, shape, drug_type, classification, supplier, active_ingredient, concentration, retail_allowed, sale_allowed_units, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit), created_at';
+    const pageSize = 1000;
+    const all = [];
+
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await window.sb
+        .from('products')
+        .select(select)
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
+
+      if (error) {
+        console.error('Farma inventory pagination:', error);
+        return;
+      }
+
+      const page = data || [];
+      all.push(...page);
+      if (page.length < pageSize) break;
+    }
+
+    if (!all.length) return;
+
+    window._productsCache = all;
+    allProductsLoaded = true;
+    refreshExtraFiltersIfNeeded();
+    addUnclassifiedOptions();
+    ensureAmpouleOption();
+    if (typeof window.renderInventoryTable === 'function') {
+      const search = document.getElementById('searchBox')?.value || '';
+      withTemporaryUnclassifiedMarkers(all, () => window.renderInventoryTable(search));
+    }
+    updateHeaderCount(all.length);
+    updateExtraCounts();
+  }
+
   function boot() {
     if (initialized) return;
     if (typeof window.renderInventoryTable !== 'function') return;
@@ -364,6 +405,7 @@
       addUnclassifiedOptions();
       ensureAmpouleOption();
       rerender();
+      loadAllProducts();
     }, 50);
   }
 
