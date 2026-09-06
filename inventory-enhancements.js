@@ -97,9 +97,7 @@
     }
     const table = document.querySelector('#tableWrap table');
     const visible = table ? table.querySelectorAll('tbody tr').length : 0;
-    box.innerHTML =
-      '<span><strong>إجمالي المنتجات:</strong> ' + totalCount + '</span>' +
-      '<span><strong>المعروض حاليًا:</strong> ' + visible + '</span>';
+    box.innerHTML = '<span><strong>إجمالي المنتجات:</strong> ' + totalCount + '</span><span><strong>المعروض حاليًا:</strong> ' + visible + '</span>';
   }
 
   function getCurrentVisibleBase(searchText) {
@@ -110,16 +108,13 @@
     const cls = selected('classChk');
     const avail = selected('availChk');
     return source.filter(p => {
-      if (term && typeof window.fuzzyIncludes === 'function' &&
-          !window.fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term)) return false;
+      if (term && typeof window.fuzzyIncludes === 'function' && !window.fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term)) return false;
       if (shape.length && !shape.includes(isBlank(p.shape) ? UNCLASSIFIED : p.shape)) return false;
       if (type.length && !type.includes(isBlank(p.drug_type) ? UNCLASSIFIED : p.drug_type)) return false;
       if (cls.length && !cls.includes(isBlank(p.classification) ? UNCLASSIFIED : p.classification)) return false;
       if (avail.length && typeof window.getAvailabilityState === 'function') {
         const state = window.getAvailabilityState(p);
-        const ok = (avail.includes('available') && state.available) ||
-                   (avail.includes('unavailable') && state.unavailable) ||
-                   (avail.includes('low') && state.low);
+        const ok = (avail.includes('available') && state.available) || (avail.includes('unavailable') && state.unavailable) || (avail.includes('low') && state.low);
         if (!ok) return false;
       }
       return true;
@@ -150,21 +145,12 @@
     if (!box || box.querySelector('input.' + groupClass + '[value="' + UNCLASSIFIED + '"]')) return;
     const label = document.createElement('label');
     label.setAttribute('data-unclassified', '1');
-    label.innerHTML =
-      '<input type="checkbox" class="' + groupClass + '" value="' + UNCLASSIFIED + '"> ' +
-      esc(labelText) +
-      ' <span class="filter-option-count" data-filter-group="' + groupClass + '" data-filter-value="' + UNCLASSIFIED + '">0</span>';
+    label.innerHTML = '<input type="checkbox" class="' + groupClass + '" value="' + UNCLASSIFIED + '"> ' + esc(labelText) + ' <span class="filter-option-count" data-filter-group="' + groupClass + '" data-filter-value="' + UNCLASSIFIED + '">0</span>';
     box.appendChild(label);
   }
 
   function updateAllFilterCounts() {
-    const pairs = [
-      ['shapeChk', 'filterShapeCount'],
-      ['typeChk', 'filterTypeCount'],
-      ['classChk', 'filterClassCount'],
-      ['availChk', 'filterAvailabilityCount']
-    ];
-    pairs.forEach(([cls, id]) => {
+    [['shapeChk', 'filterShapeCount'], ['typeChk', 'filterTypeCount'], ['classChk', 'filterClassCount'], ['availChk', 'filterAvailabilityCount']].forEach(([cls, id]) => {
       if (typeof window.updateFilterCount === 'function') window.updateFilterCount(cls, id);
     });
   }
@@ -179,10 +165,7 @@
     [UNCLASSIFIED, ...values].forEach(value => {
       const label = document.createElement('label');
       const checked = previous.has(value) ? ' checked' : '';
-      label.innerHTML =
-        '<input type="checkbox" class="' + groupClass + '" value="' + esc(value) + '"' + checked + '> ' +
-        '<span>' + esc(value === UNCLASSIFIED ? 'غير مصنف' : value) + '</span> ' +
-        '<span class="filter-option-count" data-filter-group="' + groupClass + '" data-filter-value="' + esc(value) + '">(0)</span>';
+      label.innerHTML = '<input type="checkbox" class="' + groupClass + '" value="' + esc(value) + '"' + checked + '> <span>' + esc(value === UNCLASSIFIED ? 'غير مصنف' : value) + '</span> <span class="filter-option-count" data-filter-group="' + groupClass + '" data-filter-value="' + esc(value) + '">(0)</span>';
       box.appendChild(label);
     });
     box.querySelectorAll('input').forEach(chk => {
@@ -232,24 +215,12 @@
     if (!toolbar || document.getElementById('inventorySort')) return;
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;align-items:center;gap:6px;min-width:190px;';
-    wrap.innerHTML =
-      '<label for="inventorySort" style="margin:0;white-space:nowrap;font-size:13px;">ترتيب:</label>' +
-      '<select id="inventorySort" style="margin:0;min-width:155px;">' +
-        '<option value="ar_asc">الاسم العربي: أ → ي</option>' +
-        '<option value="ar_desc">الاسم العربي: ي → أ</option>' +
-        '<option value="en_asc">الاسم الإنجليزي: A → Z</option>' +
-        '<option value="en_desc">الاسم الإنجليزي: Z → A</option>' +
-        '<option value="created_desc">الأحدث</option>' +
-      '</select>';
+    wrap.innerHTML = '<label for="inventorySort" style="margin:0;white-space:nowrap;font-size:13px;">ترتيب:</label><select id="inventorySort" style="margin:0;min-width:155px;"><option value="ar_asc">الاسم العربي: أ → ي</option><option value="ar_desc">الاسم العربي: ي → أ</option><option value="en_asc">الاسم الإنجليزي: A → Z</option><option value="en_desc">الاسم الإنجليزي: Z → A</option><option value="created_desc">الأحدث</option></select>';
     const search = document.getElementById('searchBox');
-    if (search) search.insertAdjacentElement('afterend', wrap);
-    else toolbar.prepend(wrap);
+    if (search) search.insertAdjacentElement('afterend', wrap); else toolbar.prepend(wrap);
     const select = wrap.querySelector('select');
     select.value = localStorage.getItem('farmaInventorySort') || 'ar_asc';
-    select.addEventListener('change', e => {
-      localStorage.setItem('farmaInventorySort', e.target.value);
-      rerender();
-    });
+    select.addEventListener('change', e => { localStorage.setItem('farmaInventorySort', e.target.value); rerender(); });
   }
 
   function installCreatedAtSort() {
@@ -259,9 +230,7 @@
     const originalRender = window.renderInventoryTable;
     window.renderInventoryTable = function(searchText) {
       const select = document.getElementById('inventorySort');
-      if (!select || select.value !== 'created_desc') {
-        return originalRender(searchText);
-      }
+      if (!select || select.value !== 'created_desc') return originalRender(searchText);
       const cache = window._productsCache || [];
       const sorted = [...cache].sort((a, b) => {
         const ta = Date.parse(a?.created_at || '') || 0;
@@ -272,12 +241,8 @@
       window._productsCache = sorted;
       const previous = select.value;
       select.value = 'none';
-      try {
-        return originalRender(searchText);
-      } finally {
-        select.value = previous;
-        window._productsCache = cache;
-      }
+      try { return originalRender(searchText); }
+      finally { select.value = previous; window._productsCache = cache; }
     };
   }
 
@@ -305,20 +270,13 @@
       const box = document.getElementById(id);
       if (!box || box.dataset.farmaObserved === '1') return;
       box.dataset.farmaObserved = '1';
-      new MutationObserver(() => setTimeout(() => {
-        addUnclassifiedOptions();
-        ensureAmpouleOption();
-      }, 0)).observe(box, { childList: true });
+      new MutationObserver(() => setTimeout(() => { addUnclassifiedOptions(); ensureAmpouleOption(); }, 0)).observe(box, { childList: true });
     });
   }
 
   function updateExtraCounts() {
     const products = getCurrentVisibleBase(document.getElementById('searchBox')?.value || '');
-    [
-      ['active_ingredient', 'filterIngredientBox'],
-      ['supplier', 'filterSupplierBox'],
-      ['concentration', 'filterConcentrationBox']
-    ].forEach(([field, boxId]) => {
+    [['active_ingredient', 'filterIngredientBox'], ['supplier', 'filterSupplierBox'], ['concentration', 'filterConcentrationBox']].forEach(([field, boxId]) => {
       document.querySelectorAll('#' + boxId + ' .filter-option-count').forEach(span => {
         const value = span.dataset.filterValue;
         const count = products.filter(p => value === UNCLASSIFIED ? isBlank(p[field]) : String(p[field] || '').trim() === value).length;
@@ -328,32 +286,18 @@
   }
 
   async function loadAllProducts() {
-    if (allProductsLoaded) return;
-    if (!window.sb) return;
-
+    if (allProductsLoaded || !window.sb) return;
     const select = 'id, name, name_en, shape, drug_type, classification, supplier, active_ingredient, concentration, retail_allowed, sale_allowed_units, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit), created_at';
     const pageSize = 1000;
     const all = [];
-
     for (let from = 0; ; from += pageSize) {
-      const { data, error } = await window.sb
-        .from('products')
-        .select(select)
-        .order('created_at', { ascending: false })
-        .range(from, from + pageSize - 1);
-
-      if (error) {
-        console.error('Farma inventory pagination:', error);
-        return;
-      }
-
+      const { data, error } = await window.sb.from('products').select(select).order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, from + pageSize - 1);
+      if (error) { console.error('Farma inventory pagination:', error); return; }
       const page = data || [];
       all.push(...page);
       if (page.length < pageSize) break;
     }
-
     if (!all.length) return;
-
     window._productsCache = all;
     allProductsLoaded = true;
     refreshExtraFiltersIfNeeded();
@@ -384,40 +328,15 @@
     buildExtraFilter('filterConcentrationBox', 'filterConcentrationCount', 'concentrationChk', 'concentration', 'التركيز');
     extraSignature = (window._productsCache || []).map(p => [p.id, p.supplier || '', p.active_ingredient || '', p.concentration || ''].join('|')).join('§');
     const search = document.getElementById('searchBox');
-    if (search) {
-      search.addEventListener('input', e => {
-        e.stopImmediatePropagation();
-        rerender();
-      }, true);
-    }
+    if (search) search.addEventListener('input', e => { e.stopImmediatePropagation(); rerender(); }, true);
     const tableWrap = document.getElementById('tableWrap');
-    if (tableWrap) {
-      new MutationObserver(() => {
-        if (rendering) return;
-        refreshExtraFiltersIfNeeded();
-        ensureAmpouleOption();
-        updateHeaderCount((window._productsCache || []).length);
-        updateExtraCounts();
-      }).observe(tableWrap, { childList: true, subtree: true });
-    }
-    setTimeout(() => {
-      refreshExtraFiltersIfNeeded();
-      addUnclassifiedOptions();
-      ensureAmpouleOption();
-      rerender();
-      loadAllProducts();
-    }, 50);
+    if (tableWrap) new MutationObserver(() => { if (rendering) return; refreshExtraFiltersIfNeeded(); ensureAmpouleOption(); updateHeaderCount((window._productsCache || []).length); updateExtraCounts(); }).observe(tableWrap, { childList: true, subtree: true });
+    setTimeout(() => { refreshExtraFiltersIfNeeded(); addUnclassifiedOptions(); ensureAmpouleOption(); rerender(); loadAllProducts(); }, 50);
   }
 
   const timer = setInterval(() => {
-    try {
-      ensureAmpouleOption();
-      boot();
-      if (initialized) clearInterval(timer);
-    } catch (err) {
-      console.error('Farma inventory enhancements:', err);
-    }
+    try { ensureAmpouleOption(); boot(); if (initialized) clearInterval(timer); }
+    catch (err) { console.error('Farma inventory enhancements:', err); }
   }, 50);
-
   setTimeout(() => clearInterval(timer), 15000);
 })();
