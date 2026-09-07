@@ -48,6 +48,7 @@ function minsText(m){m=Number(m||0);return Math.floor(m/60)+'س '+(m%60)+'د'}
 function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo'}).format(new Date())}
 function dateText(v){return v?new Date(v+'T12:00:00').toLocaleDateString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit'}):'—'}
 function statusText(s){return {present:'حاضر',late:'متأخر',absent:'غائب',leave:'إجازة',off:'راحة',holiday:'عطلة'}[s]||s||'—'}
+function cairoOffset(dateStr){const probe=new Date(dateStr+'T12:00:00Z');const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Africa/Cairo',timeZoneName:'longOffset'}).formatToParts(probe);const tz=parts.find(p=>p.type==='timeZoneName')?.value||'GMT+03:00';return tz.replace('GMT','')||'+03:00'}
 function requestTypeText(t){return {leave:'إجازة',late_permission:'إذن تأخير',early_leave:'إذن انصراف مبكر'}[t]||t}
 function setMsg(id,text,ok=false){$(id).textContent=text;$(id).className='msg '+(ok?'success':'error')}
 
@@ -147,8 +148,9 @@ $('saveManualAttendance').onclick=async()=>{
   if(!employee_id||!work_date)return setMsg('manualMsg','اختر الموظف والتاريخ');
   btn.disabled=true;
   try{
-    const check_in=ci?work_date+'T'+ci+':00':null;
-    const check_out=co?work_date+'T'+co+':00':null;
+    const offset=cairoOffset(work_date);
+    const check_in=ci?work_date+'T'+ci+':00'+offset:null;
+    const check_out=co?work_date+'T'+co+':00'+offset:null;
     if(check_in&&check_out&&new Date(check_out)<new Date(check_in))return setMsg('manualMsg','وقت الانصراف لا يمكن أن يسبق وقت الحضور');
     let work_minutes=null;
     if(check_in&&check_out)work_minutes=Math.max(0,Math.round((new Date(check_out)-new Date(check_in))/60000));
