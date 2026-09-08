@@ -25,7 +25,7 @@
 <div id="adminPanel" class="hidden">
 <div class="card"><h2>⚙️ إعدادات الحضور</h2><div class="two"><div><label>خط عرض الصيدلية</label><input id="lat" type="number" step="any"></div><div><label>خط طول الصيدلية</label><input id="lng" type="number" step="any"></div><div><label>نطاق السماح (متر)</label><input id="radius" type="number" min="1" max="100" step="1" value="10"></div><div><label>أقصى دقة GPS مقبولة (متر)</label><input id="accuracy" type="number" min="1" max="100" step="1" value="30"></div></div><button id="saveLocation">حفظ موقع الصيدلية</button><button id="useCurrentLocation" class="secondary">استخدم موقعي الحالي</button><div id="locationAdminMsg" class="msg"></div></div>
 
-<div class="card"><h2>✏️ تعديل حضور يدوي</h2><div class="two"><div><label>الموظف</label><select id="manualEmployee"></select></div><div><label>التاريخ</label><input id="manualDate" type="date"></div><div><label>وقت الحضور</label><input id="manualCheckIn" type="time"></div><div><label>وقت الانصراف</label><input id="manualCheckOut" type="time"></div><div><label>الحالة</label><select id="manualStatus"><option value="present">حاضر</option><option value="late">متأخر</option><option value="absent">غائب</option><option value="leave">إجازة</option><option value="holiday">عطلة</option></select></div></div><button id="saveManualAttendance">حفظ التعديل</button><div id="manualMsg" class="msg"></div><div class="muted" style="margin-top:6px">لتصحيح سجل حضور موظف نسي يسجل، أو خطأ في تحديد الموقع.</div></div>
+<div class="card"><h2>✏️ تعديل حضور يدوي</h2><div class="two"><div><label>الموظف</label><select id="manualEmployee"></select></div><div><label>التاريخ</label><input id="manualDate" type="date"></div><div><label>وقت الحضور</label><input id="manualCheckIn" type="time"></div><div><label>وقت الانصراف</label><input id="manualCheckOut" type="time"></div><div><label>الحالة</label><select id="manualStatus"><option value="present">حاضر</option><option value="late">متأخر</option><option value="absent">غائب</option><option value="leave">إجازة</option><option value="holiday">عطلة</option></select></div></div><button id="saveManualAttendance">حفظ التعديل</button><div id="manualMsg" class="msg"></div><div class="muted" style="margin-top:6px">لتصحيح سجل حضور موظف نسي يسجل، أو خطأ في تحديد الموقع. لو وقت الانصراف أصغر من وقت الحضور (شيفت ليلي يعبر منتصف الليل)، بيتحسب الانصراف تلقائيًا في اليوم التالي.</div></div>
 
 <div class="card"><h2>🟢 الحاضرون الآن</h2><button id="refreshLive" class="secondary">تحديث</button><div id="liveTable" class="scroll"></div></div>
 
@@ -49,6 +49,7 @@ function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo'
 function dateText(v){return v?new Date(v+'T12:00:00').toLocaleDateString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit'}):'—'}
 function statusText(s){return {present:'حاضر',late:'متأخر',absent:'غائب',leave:'إجازة',off:'راحة',holiday:'عطلة'}[s]||s||'—'}
 function cairoOffset(dateStr){const probe=new Date(dateStr+'T12:00:00Z');const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Africa/Cairo',timeZoneName:'longOffset'}).formatToParts(probe);const tz=parts.find(p=>p.type==='timeZoneName')?.value||'GMT+03:00';return tz.replace('GMT','')||'+03:00'}
+function addDays(dateStr,days){const [y,m,d]=dateStr.split('-').map(Number);const dt=new Date(Date.UTC(y,m-1,d));dt.setUTCDate(dt.getUTCDate()+days);return dt.toISOString().slice(0,10)}
 function requestTypeText(t){return {leave:'إجازة',late_permission:'إذن تأخير',early_leave:'إذن انصراف مبكر'}[t]||t}
 function setMsg(id,text,ok=false){$(id).textContent=text;$(id).className='msg '+(ok?'success':'error')}
 
@@ -150,7 +151,8 @@ $('saveManualAttendance').onclick=async()=>{
   try{
     const offset=cairoOffset(work_date);
     const check_in=ci?work_date+'T'+ci+':00'+offset:null;
-    const check_out=co?work_date+'T'+co+':00'+offset:null;
+    let check_out=null;
+    if(co){const outDate=(ci&&co<=ci)?addDays(work_date,1):work_date;check_out=outDate+'T'+co+':00'+offset}
     if(check_in&&check_out&&new Date(check_out)<new Date(check_in))return setMsg('manualMsg','وقت الانصراف لا يمكن أن يسبق وقت الحضور');
     let work_minutes=null;
     if(check_in&&check_out)work_minutes=Math.max(0,Math.round((new Date(check_out)-new Date(check_in))/60000));
