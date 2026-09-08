@@ -7,6 +7,7 @@
 <style>
 .att-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.att-card{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface,#fff)}.att-card .n{font-size:22px;font-weight:800;color:var(--primary-dark)}.att-card .l{font-size:11px;color:var(--text-muted)}.att-actions{display:flex;gap:10px;flex-wrap:wrap}.att-actions button{margin:0}.danger{background:#dc2626!important;color:#fff!important}.ok{background:#059669!important;color:#fff!important}.warn{background:#d97706!important;color:#fff!important}.muted{color:var(--text-muted);font-size:12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.scroll{overflow:auto}.status{display:inline-flex;padding:4px 8px;border-radius:14px;font-size:11px;font-weight:700;white-space:nowrap}.status.present{background:#dcfce7;color:#166534}.status.late{background:#fef3c7;color:#92400e}.status.absent{background:#fee2e2;color:#991b1b}.status.leave{background:#dbeafe;color:#1d4ed8}.status.off{background:#f1f5f9;color:#475569}.status.holiday{background:#ede9fe;color:#6d28d9}.status.pending{background:#fef3c7;color:#92400e}.status.approved{background:#dcfce7;color:#166534}.status.rejected{background:#fee2e2;color:#991b1b}.modal{position:fixed;inset:0;background:rgba(15,23,42,.4);display:none;align-items:center;justify-content:center;padding:16px;z-index:2000}.modal.open{display:flex}.modal-box{background:#fff;border-radius:14px;padding:18px;max-width:520px;width:100%;max-height:90vh;overflow:auto}.mini{font-size:11px}.request-box{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}.request-box summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}.request-box summary::-webkit-details-marker{display:none}.request-box summary::before{content:'▸';margin-left:6px;color:var(--text-muted);transition:transform .15s}.request-box[open] summary::before{transform:rotate(90deg)}.request-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.map-note{padding:10px;border-radius:9px;background:var(--bg);font-size:11px;margin-top:8px}.form-actions{display:flex;gap:8px;margin-top:10px}.form-actions button{margin:0;flex:1}.hidden{display:none!important}.report-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0}.report-summary .att-card{text-align:center}.report-table{min-width:1050px}.report-table th,.report-table td{white-space:nowrap}.table-actions{display:flex;gap:6px;flex-wrap:wrap}.table-actions button{margin:0;padding:7px 10px;font-size:12px}.empty{padding:18px;text-align:center;color:var(--text-muted)}
 .headerbar{display:flex;align-items:center;gap:10px}.notif-wrap{position:relative}.notif-btn{position:relative;background:transparent;border:1px solid var(--border);border-radius:10px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1}.notif-badge{position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;padding:1px 5px;font-weight:800;min-width:16px;text-align:center}.notif-panel{position:absolute;top:120%;right:0;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.15);width:290px;max-height:360px;overflow:auto;z-index:2500;padding:8px}.notif-head{font-weight:800;padding:6px 8px;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;justify-content:space-between}.notif-item{padding:8px;border-radius:8px;margin-bottom:4px}.notif-item.clickable{cursor:pointer}.notif-item.clickable:hover{background:var(--bg)}
+details.card{padding:0;overflow:hidden}details.card>summary{cursor:pointer;list-style:none;padding:16px;margin:0;display:flex;align-items:center;gap:8px}details.card>summary::-webkit-details-marker{display:none}details.card>summary::before{content:'▸';color:var(--text-muted);transition:transform .15s;font-size:14px}details.card[open]>summary::before{transform:rotate(90deg)}details.card>summary h2{margin:0;display:inline}details.card>*:not(summary){padding:0 16px 16px}
 @media(max-width:800px){.att-grid{grid-template-columns:1fr 1fr}.two,.three{grid-template-columns:1fr}.att-card .n{font-size:19px}.report-summary{grid-template-columns:repeat(2,1fr)}.notif-panel{width:250px}}
 </style>
 </head>
@@ -23,22 +24,24 @@
 </div>
 
 <div id="adminPanel" class="hidden">
-<div class="card"><h2>⚙️ إعدادات الحضور</h2><div class="two"><div><label>خط عرض الصيدلية</label><input id="lat" type="number" step="any"></div><div><label>خط طول الصيدلية</label><input id="lng" type="number" step="any"></div><div><label>نطاق السماح (متر)</label><input id="radius" type="number" min="1" max="100" step="1" value="10"></div><div><label>أقصى دقة GPS مقبولة (متر)</label><input id="accuracy" type="number" min="1" max="100" step="1" value="30"></div></div><button id="saveLocation">حفظ موقع الصيدلية</button><button id="useCurrentLocation" class="secondary">استخدم موقعي الحالي</button><div id="locationAdminMsg" class="msg"></div></div>
+<details class="card collapsible" data-key="loc"><summary><h2>⚙️ إعدادات الحضور</h2></summary><div class="two"><div><label>خط عرض الصيدلية</label><input id="lat" type="number" step="any"></div><div><label>خط طول الصيدلية</label><input id="lng" type="number" step="any"></div><div><label>نطاق السماح (متر)</label><input id="radius" type="number" min="1" max="100" step="1" value="10"></div><div><label>أقصى دقة GPS مقبولة (متر)</label><input id="accuracy" type="number" min="1" max="100" step="1" value="30"></div></div><button id="saveLocation">حفظ موقع الصيدلية</button><button id="useCurrentLocation" class="secondary">استخدم موقعي الحالي</button><div id="locationAdminMsg" class="msg"></div></details>
 
-<div class="card"><h2>✏️ تعديل حضور يدوي</h2><div class="two"><div><label>الموظف</label><select id="manualEmployee"></select></div><div><label>التاريخ</label><input id="manualDate" type="date"></div><div><label>وقت الحضور</label><input id="manualCheckIn" type="time"></div><div><label>وقت الانصراف</label><input id="manualCheckOut" type="time"></div><div><label>الحالة</label><select id="manualStatus"><option value="present">حاضر</option><option value="late">متأخر</option><option value="absent">غائب</option><option value="leave">إجازة</option><option value="holiday">عطلة</option></select></div></div><button id="saveManualAttendance">حفظ التعديل</button><div id="manualMsg" class="msg"></div><div class="muted" style="margin-top:6px">لتصحيح سجل حضور موظف نسي يسجل، أو خطأ في تحديد الموقع. لو وقت الانصراف أصغر من وقت الحضور (شيفت ليلي يعبر منتصف الليل)، بيتحسب الانصراف تلقائيًا في اليوم التالي.</div></div>
+<details class="card collapsible" data-key="manual"><summary><h2>✏️ تعديل حضور يدوي</h2></summary><div class="two"><div><label>الموظف</label><select id="manualEmployee"></select></div><div><label>التاريخ</label><input id="manualDate" type="date"></div><div><label>وقت الحضور</label><input id="manualCheckIn" type="time"></div><div><label>وقت الانصراف</label><input id="manualCheckOut" type="time"></div><div><label>الحالة</label><select id="manualStatus"><option value="present">حاضر</option><option value="late">متأخر</option><option value="absent">غائب</option><option value="leave">إجازة</option><option value="holiday">عطلة</option></select></div></div><button id="saveManualAttendance">حفظ التعديل</button><div id="manualMsg" class="msg"></div><div class="muted" style="margin-top:6px">لتصحيح سجل حضور موظف نسي يسجل، أو خطأ في تحديد الموقع. لو وقت الانصراف أصغر من وقت الحضور (شيفت ليلي يعبر منتصف الليل)، بيتحسب الانصراف تلقائيًا في اليوم التالي.</div></details>
 
-<div class="card"><h2>🟢 الحاضرون الآن</h2><button id="refreshLive" class="secondary">تحديث</button><div id="liveTable" class="scroll"></div></div>
+<details class="card collapsible" data-key="live" open><summary><h2>🟢 الحاضرون الآن</h2></summary><button id="refreshLive" class="secondary">تحديث</button><div id="liveTable" class="scroll"></div></details>
 
-<div class="card"><h2>🕐 الشيفتات</h2><div class="three"><div><label>اسم الشيفت</label><input id="shiftName" placeholder="مثال: صباحي"></div><div><label>من</label><input id="shiftStart" type="time"></div><div><label>إلى</label><input id="shiftEnd" type="time"></div><div><label>السماح بالتأخير (دقيقة)</label><input id="shiftGrace" type="number" min="0" value="10"></div><div><label>حد الـ Overtime (دقيقة)</label><input id="shiftOtGrace" type="number" min="0" value="0"></div></div><input type="hidden" id="shiftEditId" value=""><button id="addShift">إضافة الشيفت</button> <button id="cancelShiftEdit" style="display:none">إلغاء التعديل</button><div id="shiftsTable" class="scroll"></div></div>
-<div class="card"><h2>📅 جدول الموظفين الأسبوعي</h2><div class="two"><div><label>الموظف</label><select id="scheduleEmployee"></select></div><div><label>الشيفت</label><select id="scheduleShift"></select></div></div><div class="two"><div><label>من تاريخ</label><input id="scheduleFrom" type="date"></div><div><label>إلى تاريخ (اختياري)</label><input id="scheduleTo" type="date"></div></div><button id="addSchedule">تعيين الشيفت</button><div id="scheduleTable" class="scroll"></div></div>
+<details class="card collapsible" data-key="shifts"><summary><h2>🕐 الشيفتات</h2></summary><div class="three"><div><label>اسم الشيفت</label><input id="shiftName" placeholder="مثال: صباحي"></div><div><label>من</label><input id="shiftStart" type="time"></div><div><label>إلى</label><input id="shiftEnd" type="time"></div><div><label>السماح بالتأخير (دقيقة)</label><input id="shiftGrace" type="number" min="0" value="10"></div><div><label>حد الـ Overtime (دقيقة)</label><input id="shiftOtGrace" type="number" min="0" value="0"></div></div><input type="hidden" id="shiftEditId" value=""><button id="addShift">إضافة الشيفت</button> <button id="cancelShiftEdit" style="display:none">إلغاء التعديل</button><div id="shiftsTable" class="scroll"></div></details>
 
-<div class="card"><h2>📥 طلبات الموظفين</h2><div class="three"><div><label>الحالة</label><select id="reqFilterStatus"><option value="">الكل</option><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select></div><div><label>الموظف</label><select id="reqFilterEmployee"><option value="">الكل</option></select></div><div><label>بحث بالسبب</label><input id="reqFilterSearch" placeholder="بحث..."></div></div><div id="adminRequests"><p class="loading">جاري التحميل...</p></div></div>
+<details class="card collapsible" data-key="schedule"><summary><h2>📅 جدول الموظفين الأسبوعي</h2></summary><div class="two"><div><label>الموظف</label><select id="scheduleEmployee"></select></div><div><label>الشيفت</label><select id="scheduleShift"></select></div></div><div class="two"><div><label>من تاريخ</label><input id="scheduleFrom" type="date"></div><div><label>إلى تاريخ (اختياري)</label><input id="scheduleTo" type="date"></div></div><input type="hidden" id="scheduleEditId" value=""><button id="addSchedule">تعيين الشيفت</button> <button id="cancelScheduleEdit" style="display:none">إلغاء التعديل</button><div id="scheduleTable" class="scroll"></div></details>
 
-<div class="card"><h2>📊 سجل الحضور</h2><div class="two"><div><label>من تاريخ</label><input id="reportFrom" type="date"></div><div><label>إلى تاريخ</label><input id="reportTo" type="date"></div></div><button id="loadReport">عرض التقرير</button> <button id="exportReportBtn" class="secondary">⬇️ تصدير CSV</button><div id="reportSummary" class="report-summary"></div><div id="reportTable" class="scroll"></div></div>
+<details class="card collapsible" data-key="requests"><summary><h2>📥 طلبات الموظفين</h2></summary><div class="three"><div><label>الحالة</label><select id="reqFilterStatus"><option value="">الكل</option><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select></div><div><label>الموظف</label><select id="reqFilterEmployee"><option value="">الكل</option></select></div><div><label>بحث بالسبب</label><input id="reqFilterSearch" placeholder="بحث..."></div></div><div id="adminRequests"><p class="loading">جاري التحميل...</p></div></details>
+
+<details class="card collapsible" data-key="report" open><summary><h2>📊 سجل الحضور</h2></summary><div class="two"><div><label>من تاريخ</label><input id="reportFrom" type="date"></div><div><label>إلى تاريخ</label><input id="reportTo" type="date"></div></div><button id="loadReport">عرض التقرير</button> <button id="exportReportBtn" class="secondary">⬇️ تصدير CSV</button><div id="reportSummary" class="report-summary"></div><div id="reportTable" class="scroll"></div></details>
 </div></div></div>
 <div id="decisionModal" class="modal"><div class="modal-box"><h3 id="decisionTitle">مراجعة الطلب</h3><p id="decisionDetails"></p><label>ملاحظة الأدمن <span class="muted">(اختيارية)</span></label><textarea id="adminNote" rows="4" placeholder="اكتب ملاحظتك على القرار..."></textarea><div class="form-actions"><button id="approveReq" class="ok">موافقة</button><button id="rejectReq" class="danger">رفض</button><button id="closeModal" class="secondary">إلغاء</button></div></div></div>
+<div id="editRequestModal" class="modal"><div class="modal-box"><h3>تعديل الطلب</h3><label>نوع الطلب</label><select id="editReqType"><option value="leave">🏖️ إجازة</option><option value="late_permission">🕐 إذن تأخير</option><option value="early_leave">🚪 إذن انصراف مبكر</option></select><div class="two"><div><label>من تاريخ</label><input id="editReqStart" type="date"></div><div id="editReqEndWrap"><label>إلى تاريخ</label><input id="editReqEnd" type="date"></div></div><div id="editReqTimeWrap"><label>الوقت</label><input id="editReqTime" type="time"></div><label>السبب</label><textarea id="editReqReason" rows="3"></textarea><label>الحالة</label><select id="editReqStatus"><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select><input type="hidden" id="editReqId"><div class="form-actions"><button id="saveEditReq" class="ok">حفظ</button><button id="closeEditReq" class="secondary">إلغاء</button></div><div id="editReqMsg" class="msg"></div></div></div>
 <script src="config.js"></script><script>
-let auth=null,isAdmin=false,selectedRequest=null,employees=[],shifts=[];
+let auth=null,isAdmin=false,selectedRequest=null,employees=[],shifts=[],schedules=[];
 let myRequestsData=[],allAdminRequests=[],lastReportRows=[],reportLoading=false,notifOpen=false;
 const days=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const $=id=>document.getElementById(id);
@@ -52,6 +55,14 @@ function cairoOffset(dateStr){const probe=new Date(dateStr+'T12:00:00Z');const p
 function addDays(dateStr,days){const [y,m,d]=dateStr.split('-').map(Number);const dt=new Date(Date.UTC(y,m-1,d));dt.setUTCDate(dt.getUTCDate()+days);return dt.toISOString().slice(0,10)}
 function requestTypeText(t){return {leave:'إجازة',late_permission:'إذن تأخير',early_leave:'إذن انصراف مبكر'}[t]||t}
 function setMsg(id,text,ok=false){$(id).textContent=text;$(id).className='msg '+(ok?'success':'error')}
+
+/* ---------- قوائم مندلسة: حفظ الحالة (مفتوح/مقفول) لكل كارت ---------- */
+document.querySelectorAll('details.collapsible[data-key]').forEach(d=>{
+  const key='att_card_'+d.dataset.key;
+  const saved=localStorage.getItem(key);
+  if(saved==='open')d.open=true; else if(saved==='closed')d.open=false;
+  d.addEventListener('toggle',()=>{localStorage.setItem(key,d.open?'open':'closed')});
+});
 
 (async()=>{auth=await requireAuth();if(!auth)return;isAdmin=auth.profile.role==='admin';$('userinfo').textContent=auth.profile.full_name+' ('+(isAdmin?'أدمن':'موظف')+')';
 if(isAdmin){$('employeePanel').classList.add('hidden');$('employeeRequests').classList.add('hidden');$('adminPanel').classList.remove('hidden');await loadAdmin()}
@@ -141,7 +152,7 @@ async function loadEmployees(){
   $('scheduleEmployee').innerHTML=opts;$('manualEmployee').innerHTML=opts;
 }
 
-/* ---------- تعديل حضور يدوي (إضافة جديدة) ---------- */
+/* ---------- تعديل حضور يدوي ---------- */
 $('saveManualAttendance').onclick=async()=>{
   const btn=$('saveManualAttendance');
   const employee_id=$('manualEmployee').value,work_date=$('manualDate').value,status=$('manualStatus').value;
@@ -164,7 +175,7 @@ $('saveManualAttendance').onclick=async()=>{
   }finally{btn.disabled=false}
 };
 
-/* ---------- الحاضرون الآن (إضافة جديدة) ---------- */
+/* ---------- الحاضرون الآن ---------- */
 async function loadLiveNow(){
   const d=today();
   const {data,error}=await sb.from('attendance').select('employee_id,check_in,profiles!attendance_employee_id_fkey(full_name)').eq('work_date',d).not('check_in','is',null).is('check_out',null);
@@ -206,27 +217,44 @@ $('addShift').onclick=async()=>{
 function resetShiftForm(){$('shiftEditId').value='';$('shiftName').value='';$('shiftStart').value='';$('shiftEnd').value='';$('shiftGrace').value='10';$('shiftOtGrace').value='0';$('addShift').textContent='إضافة الشيفت';$('cancelShiftEdit').style.display='none'}
 $('cancelShiftEdit').onclick=resetShiftForm;
 
-/* ---------- جدول الموظفين ---------- */
+/* ---------- جدول الموظفين الأسبوعي (تعديل + حذف) ---------- */
 $('addSchedule').onclick=async()=>{
   const btn=$('addSchedule');
   const employee_id=$('scheduleEmployee').value,shift_id=$('scheduleShift').value,weekday=null,effective_from=$('scheduleFrom').value,effective_to=$('scheduleTo').value;
+  const editId=$('scheduleEditId').value;
   if(!employee_id||!shift_id||!effective_from||!effective_to)return alert('حدد الموظف والشيفت ومن تاريخ وإلى تاريخ');
   if(effective_to<effective_from)return alert('تاريخ النهاية لا يمكن أن يسبق البداية');
   btn.disabled=true;
   try{
-    const {error}=await sb.from('employee_shift_schedule').insert({employee_id,shift_id,weekday,effective_from,effective_to});
-    if(error)return alert('تعذر تعيين الشيفت: '+error.message);
+    if(editId){
+      const {error}=await sb.from('employee_shift_schedule').update({employee_id,shift_id,weekday,effective_from,effective_to}).eq('id',editId);
+      if(error)return alert('تعذر تعديل التعيين: '+error.message);
+      resetScheduleForm();
+    }else{
+      const {error}=await sb.from('employee_shift_schedule').insert({employee_id,shift_id,weekday,effective_from,effective_to});
+      if(error)return alert('تعذر تعيين الشيفت: '+error.message);
+    }
     await loadSchedules();
   }finally{btn.disabled=false}
 };
+function resetScheduleForm(){$('scheduleEditId').value='';$('scheduleFrom').value='';$('scheduleTo').value='';$('addSchedule').textContent='تعيين الشيفت';$('cancelScheduleEdit').style.display='none'}
+$('cancelScheduleEdit').onclick=resetScheduleForm;
 async function loadSchedules(){
   const {data,error}=await sb.from('employee_shift_schedule').select('id,employee_id,shift_id,weekday,effective_from,effective_to,profiles!employee_shift_schedule_employee_id_fkey(full_name),attendance_shifts!employee_shift_schedule_shift_id_fkey(name,start_time,end_time)').order('effective_from',{ascending:false});
   if(error){$('scheduleTable').innerHTML='<p class="error">'+esc(error.message)+'</p>';return}
-  if(!data?.length){$('scheduleTable').innerHTML='<div class="empty">لا توجد جداول محددة.</div>';return}
-  $('scheduleTable').innerHTML='<table><thead><tr><th>الموظف</th><th>الشيفت</th><th>من</th><th>إلى</th></tr></thead><tbody>'+data.map(r=>'<tr><td>'+esc(r.profiles?.full_name||'—')+'</td><td>'+esc(r.attendance_shifts?.name||'—')+'</td><td>'+dateText(r.effective_from)+'</td><td>'+dateText(r.effective_to)+'</td></tr>').join('')+'</tbody></table>';
+  schedules=data||[];
+  if(!schedules.length){$('scheduleTable').innerHTML='<div class="empty">لا توجد جداول محددة.</div>';return}
+  $('scheduleTable').innerHTML='<table><thead><tr><th>الموظف</th><th>الشيفت</th><th>من</th><th>إلى</th><th>إجراءات</th></tr></thead><tbody>'+schedules.map(r=>'<tr><td>'+esc(r.profiles?.full_name||'—')+'</td><td>'+esc(r.attendance_shifts?.name||'—')+'</td><td>'+dateText(r.effective_from)+'</td><td>'+dateText(r.effective_to)+'</td><td><button class="editScheduleBtn" data-id="'+r.id+'">تعديل</button> <button class="deleteScheduleBtn" data-id="'+r.id+'">حذف</button></td></tr>').join('')+'</tbody></table>';
 }
+$('scheduleTable').addEventListener('click',e=>{
+  const eb=e.target.closest('.editScheduleBtn'),db=e.target.closest('.deleteScheduleBtn');
+  if(eb){const s=schedules.find(x=>String(x.id)===eb.dataset.id);if(s)startEditSchedule(s)}
+  if(db)deleteSchedule(db.dataset.id);
+});
+function startEditSchedule(s){$('scheduleEditId').value=s.id;$('scheduleEmployee').value=s.employee_id;$('scheduleShift').value=s.shift_id;$('scheduleFrom').value=s.effective_from;$('scheduleTo').value=s.effective_to;$('addSchedule').textContent='حفظ التعديل';$('cancelScheduleEdit').style.display='inline-block'}
+async function deleteSchedule(id){if(!confirm('تأكيد حذف هذا التعيين؟'))return;const {error}=await sb.from('employee_shift_schedule').delete().eq('id',id);if(error)return alert('تعذر الحذف: '+error.message);await loadSchedules()}
 
-/* ---------- طلبات الموظفين (فلاتر + قائمة مندلسة) ---------- */
+/* ---------- طلبات الموظفين (فلاتر + قائمة مندلسة + تعديل/حذف) ---------- */
 async function loadAdminRequests(){
   if(!isAdmin)return;
   const {data,error}=await sb.from('attendance_requests').select('*,employee:profiles!attendance_requests_employee_id_fkey(full_name)').order('created_at',{ascending:false});
@@ -244,10 +272,15 @@ function renderAdminRequests(){
   const statusF=$('reqFilterStatus').value,empF=$('reqFilterEmployee').value,searchF=$('reqFilterSearch').value.trim().toLowerCase();
   const filtered=allAdminRequests.filter(r=>(!statusF||r.status===statusF)&&(!empF||r.employee?.full_name===empF)&&(!searchF||(r.reason||'').toLowerCase().includes(searchF)));
   if(!filtered.length){$('adminRequests').innerHTML='<div class="empty">لا توجد طلبات مطابقة.</div>';return}
-  $('adminRequests').innerHTML=filtered.map(r=>'<details class="request-box"><summary><span><strong>'+esc(r.employee?.full_name||'موظف')+'</strong> — '+esc(requestTypeText(r.request_type))+' — '+dateText(r.start_date)+'</span><span class="status '+esc(r.status)+'">'+esc({pending:'قيد المراجعة',approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span></summary><div class="mini">'+(r.end_date&&r.end_date!==r.start_date?' → '+dateText(r.end_date):'')+(r.requested_time?' · ⏰ '+esc(String(r.requested_time).slice(0,5)):'')+'</div><p>'+esc(r.reason)+'</p>'+(r.admin_note?'<div class="map-note">ملاحظة القرار: '+esc(r.admin_note)+'</div>':'')+(r.status==='pending'?'<div class="table-actions"><button class="ok reviewReqBtn" data-id="'+r.id+'">مراجعة الطلب</button></div>':'')+'</details>').join('');
+  $('adminRequests').innerHTML=filtered.map(r=>'<details class="request-box"><summary><span><strong>'+esc(r.employee?.full_name||'موظف')+'</strong> — '+esc(requestTypeText(r.request_type))+' — '+dateText(r.start_date)+'</span><span class="status '+esc(r.status)+'">'+esc({pending:'قيد المراجعة',approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span></summary><div class="mini">'+(r.end_date&&r.end_date!==r.start_date?' → '+dateText(r.end_date):'')+(r.requested_time?' · ⏰ '+esc(String(r.requested_time).slice(0,5)):'')+'</div><p>'+esc(r.reason)+'</p>'+(r.admin_note?'<div class="map-note">ملاحظة القرار: '+esc(r.admin_note)+'</div>':'')+'<div class="table-actions">'+(r.status==='pending'?'<button class="ok reviewReqBtn" data-id="'+r.id+'">مراجعة الطلب</button>':'')+'<button class="secondary editReqBtn" data-id="'+r.id+'">تعديل</button><button class="danger deleteReqBtn" data-id="'+r.id+'">حذف</button></div></details>').join('');
 }
 $('reqFilterStatus').onchange=renderAdminRequests;$('reqFilterEmployee').onchange=renderAdminRequests;$('reqFilterSearch').oninput=renderAdminRequests;
-$('adminRequests').addEventListener('click',e=>{const b=e.target.closest('.reviewReqBtn');if(b)openDecision(b.dataset.id)});
+$('adminRequests').addEventListener('click',e=>{
+  const rb=e.target.closest('.reviewReqBtn');if(rb)openDecision(rb.dataset.id);
+  const eb=e.target.closest('.editReqBtn');if(eb)openEditRequest(eb.dataset.id);
+  const db=e.target.closest('.deleteReqBtn');if(db)deleteRequest(db.dataset.id);
+});
+async function deleteRequest(id){if(!confirm('تأكيد حذف هذا الطلب نهائيًا؟ لا يمكن التراجع عن ذلك.'))return;const {error}=await sb.from('attendance_requests').delete().eq('id',id);if(error)return alert('تعذر الحذف: '+error.message);await loadAdminRequests()}
 
 window.openDecision=async id=>{
   const {data,error}=await sb.from('attendance_requests').select('*,employee:profiles!attendance_requests_employee_id_fkey(full_name)').eq('id',id).single();
@@ -268,6 +301,45 @@ async function decide(status){
 $('approveReq').onclick=()=>decide('approved');$('rejectReq').onclick=()=>decide('rejected');
 $('closeModal').onclick=()=>{$('decisionModal').classList.remove('open');selectedRequest=null};
 $('decisionModal').onclick=e=>{if(e.target===$('decisionModal'))$('closeModal').click()};
+
+/* ---------- تعديل طلب كامل (نوع/تواريخ/سبب/حالة) ---------- */
+window.openEditRequest=id=>{
+  const r=allAdminRequests.find(x=>String(x.id)===String(id));
+  if(!r)return;
+  $('editReqId').value=r.id;
+  $('editReqType').value=r.request_type;
+  $('editReqStart').value=r.start_date;
+  $('editReqEnd').value=r.end_date||r.start_date;
+  $('editReqTime').value=r.requested_time?String(r.requested_time).slice(0,5):'';
+  $('editReqReason').value=r.reason||'';
+  $('editReqStatus').value=r.status;
+  const leave=$('editReqType').value==='leave';
+  $('editReqEndWrap').classList.toggle('hidden',!leave);
+  $('editReqTimeWrap').classList.toggle('hidden',leave);
+  $('editReqMsg').textContent='';$('editReqMsg').className='msg';
+  $('editRequestModal').classList.add('open');
+};
+$('editReqType').onchange=()=>{const leave=$('editReqType').value==='leave';$('editReqEndWrap').classList.toggle('hidden',!leave);$('editReqTimeWrap').classList.toggle('hidden',leave)};
+$('closeEditReq').onclick=()=>$('editRequestModal').classList.remove('open');
+$('editRequestModal').onclick=e=>{if(e.target===$('editRequestModal'))$('closeEditReq').click()};
+$('saveEditReq').onclick=async()=>{
+  const btn=$('saveEditReq');
+  const id=$('editReqId').value;
+  const type=$('editReqType').value,start=$('editReqStart').value,end=type==='leave'?$('editReqEnd').value:start,time=type==='leave'?null:$('editReqTime').value,reason=$('editReqReason').value.trim(),status=$('editReqStatus').value;
+  if(!start||!end)return setMsg('editReqMsg','حدد التاريخ');
+  if(type!=='leave'&&!time)return setMsg('editReqMsg','حدد الوقت');
+  if(reason.length<5)return setMsg('editReqMsg','السبب يجب ألا يقل عن 5 أحرف');
+  if(end<start)return setMsg('editReqMsg','تاريخ النهاية لا يمكن أن يسبق البداية');
+  btn.disabled=true;
+  try{
+    const payload={request_type:type,start_date:start,end_date:end,requested_time:time,reason,status};
+    if(status!=='pending'){payload.reviewed_by=auth.user.id;payload.reviewed_at=new Date().toISOString()}else{payload.reviewed_by=null;payload.reviewed_at=null;payload.admin_note=null}
+    const {error}=await sb.from('attendance_requests').update(payload).eq('id',id);
+    if(error)return setMsg('editReqMsg','تعذر الحفظ: '+error.message);
+    $('editRequestModal').classList.remove('open');
+    await loadAdminRequests();
+  }finally{btn.disabled=false}
+};
 
 /* ---------- التقرير + تصدير CSV ---------- */
 $('loadReport').onclick=loadReport;
