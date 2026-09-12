@@ -63,13 +63,3 @@ document.addEventListener('DOMContentLoaded',async()=>{
   panel.classList.remove('hidden');
   if(typeof loadToday==='function')await loadToday();
 });
-
-(function loadBillingEnhancements(){
-  if(!/(^|\/)(sales|invoices)\.html$/i.test(location.pathname))return;
-  if(document.getElementById('farmaBillingEnhancements'))return;
-  const script=document.createElement('script');
-  script.id='farmaBillingEnhancements';
-  script.src='farma-billing-enhancements.js?v=1';
-  script.async=false;
-  document.head.appendChild(script);
-})();
