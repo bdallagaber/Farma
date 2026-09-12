@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>العملاء - نظام إدارة الصيدلية</title><script src="supabase-lib.js"></script><link rel="stylesheet" href="style.css">
+<style>
+.cust-toolbar{display:flex;align-items:center;gap:8px;margin:18px 0 14px;flex-wrap:wrap}.cust-search{flex:1;min-width:230px}.cust-search input{width:100%;height:44px;margin:0}
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:13px 15px}.summary-label{font-size:11px;color:var(--text-muted);margin-bottom:4px}.summary-value{font-size:20px;font-weight:800;color:var(--primary-dark)}.summary-value.money{font-size:21px}
+.cust-row{cursor:pointer}.cust-row:hover{background:var(--bg)}.debt-pos{color:var(--danger);font-weight:700}.debt-zero{color:var(--text-muted)}
+.cust-modal{position:fixed;inset:0;background:rgba(15,23,27,.5);display:flex;align-items:flex-start;justify-content:center;z-index:1100;padding:20px;overflow-y:auto}.cust-paper{background:#fff;border-radius:10px;padding:24px;max-width:520px;width:100%;margin-top:20px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.cust-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--border)}.cust-header h2{font-size:18px;color:var(--primary-dark)}.cust-close{width:32px;height:32px;border:0;background:transparent;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer;padding:0;margin:0}
+.tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)}.tab-btn{background:transparent;color:var(--text-muted);border:0;border-radius:0;padding:9px 4px;margin:0 8px 0 0;font-size:13px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent}.tab-btn.active{color:var(--primary-dark);border-bottom-color:var(--primary)}
+.tab-pane{display:none}.tab-pane.active{display:block}
+.ledger-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px}.ledger-row:last-child{border-bottom:0}.ledger-note{color:var(--text-muted);font-size:11px;margin-top:2px}.ledger-amt.debt{color:var(--danger);font-weight:700}.ledger-amt.pay{color:var(--primary-dark);font-weight:700}
+.balance-box{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;text-align:center;margin-bottom:14px}.balance-box .amount{font-size:24px;font-weight:800}.balance-box .amount.zero{color:var(--text-muted)}.balance-box .amount.pos{color:var(--danger)}
+.purchase-row{padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;display:flex;justify-content:space-between}.purchase-row:last-child{border-bottom:0}
+.msg{margin-top:8px}
+</style></head>
+<body class="has-sidebar">
+<header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px">خروج</button></div></header>
+<nav><a href="inventory.html">المخزون</a><a href="sales.html">المبيعات</a><a href="invoices.html">🧾 الفواتير</a><a href="customers.html" class="active">👥 العملاء</a><a href="shortages.html">النواقص</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a></nav><div id="sidebarOverlay" class="sidebar-overlay"></div>
+<div class="main-content"><div class="card"><h2>👥 العملاء</h2>
+<div class="cust-toolbar"><div class="cust-search"><input id="searchBox" type="text" placeholder="ابحث بالاسم أو التليفون..."></div><button type="button" id="addCustomerBtn">+ عميل جديد</button></div>
+<div class="summary-grid"><div class="summary-card"><div class="summary-label">عدد العملاء</div><div class="summary-value" id="custCount">0</div></div><div class="summary-card"><div class="summary-label">إجمالي المديونية</div><div class="summary-value money" id="totalDebt">0.00 ج.م</div></div></div>
+<div id="customersWrap"><p class="loading">جاري التحميل...</p></div>
+</div></div>
+<div id="customerModal" class="cust-modal hidden"><div class="cust-paper" id="customerPaperContent"></div></div>
+<script src="config.js"></script><script>
+let currentUser,customersCache=[],salesCache=[],ledgerCache=[];
+(async()=>{const auth=await requireAuth();if(!auth)return;if(!guardPageAccess(auth.profile,'customers'))return;currentUser=auth.user;document.getElementById('userinfo').textContent=auth.profile.full_name+' ('+(auth.profile.role==='admin'?'أدمن':'موظف')+')';await loadCustomers()})();
+document.getElementById('logoutBtn').addEventListener('click',async()=>{await sb.auth.signOut();location.href='index.html'});
+function esc(s){const d=document.createElement('div');d.textContent=s==null?'':String(s);return d.innerHTML}
+function dFormat(v){return new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
+
+async function loadCustomers(){
+  const wrap=document.getElementById('customersWrap');
+  const [{data:custs,error},{data:ledger},{data:sales}]=await Promise.all([
+    sb.from('customers').select('id,name,phone,credit_limit,created_at').order('name'),
+    sb.from('customer_ledger').select('id,customer_id,amount,note,created_at,created_by,profiles(full_name)'),
+    sb.from('sales').select('id,sale_group_id,customer_id,product_id,quantity,unit_sold,sale_price,created_at,products(name)').not('customer_id','is',null).order('created_at',{ascending:false})
+  ]);
+  if(error){wrap.innerHTML='<p style="color:#dc2626">تعذّر تحميل العملاء: '+esc(error.message)+'</p>';return}
+  ledgerCache=ledger||[];salesCache=sales||[];
+  customersCache=(custs||[]).map(c=>{
+    const bal=ledgerCache.filter(l=>l.customer_id===c.id).reduce((s,l)=>s+Number(l.amount||0),0);
+    return {...c,balance:bal};
+  });
+  renderCustomers();
+}
+function balanceFor(id){const c=customersCache.find(x=>x.id===id);return c?c.balance:0}
+function renderCustomers(){
+  const wrap=document.getElementById('customersWrap');
+  const term=document.getElementById('searchBox').value.trim().toLowerCase();
+  const filtered=customersCache.filter(c=>!term||((c.name||'')+' '+(c.phone||'')).toLowerCase().includes(term));
+  document.getElementById('custCount').textContent=customersCache.length.toLocaleString('ar-EG');
+  const totalDebt=customersCache.reduce((s,c)=>s+Math.max(c.balance,0),0);
+  document.getElementById('totalDebt').textContent=totalDebt.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م';
+  if(!filtered.length){wrap.innerHTML='<p class="loading">مفيش عملاء مطابقين</p>';return}
+  let h='<table><thead><tr><th>الاسم</th><th>التليفون</th><th>الرصيد</th></tr></thead><tbody>';
+  filtered.sort((a,b)=>b.balance-a.balance).forEach(c=>{
+    h+='<tr class="cust-row" data-id="'+esc(c.id)+'"><td>'+esc(c.name)+'</td><td>'+esc(c.phone||'—')+'</td><td class="'+(c.balance>0?'debt-pos':'debt-zero')+'">'+c.balance.toFixed(2)+' ج</td></tr>';
+  });
+  h+='</tbody></table>';
+  wrap.innerHTML=h;
+  wrap.querySelectorAll('.cust-row').forEach(r=>r.addEventListener('click',()=>openCustomer(r.dataset.id)));
+}
+document.getElementById('searchBox').addEventListener('input',renderCustomers);
+
+function openCustomer(id){
+  const c=customersCache.find(x=>x.id===id);
+  if(!c)return;
+  renderCustomerModal(c,'info');
+  document.getElementById('customerModal').classList.remove('hidden');
+}
+function closeCustomer(){document.getElementById('customerModal').classList.add('hidden')}
+document.getElementById('customerModal').addEventListener('click',e=>{if(e.target.id==='customerModal')closeCustomer()});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCustomer()});
+
+function renderCustomerModal(c,activeTab){
+  const p=document.getElementById('customerPaperContent');
+  p.innerHTML=
+    '<div class="cust-header"><h2>'+esc(c.name)+'</h2><button type="button" class="cust-close" id="custClose">×</button></div>'+
+    '<div class="tabs">'+
+      '<button type="button" class="tab-btn" data-tab="info">البيانات</button>'+
+      '<button type="button" class="tab-btn" data-tab="ledger">الرصيد</button>'+
+      '<button type="button" class="tab-btn" data-tab="history">المشتريات</button>'+
+    '</div>'+
+    '<div class="tab-pane" id="paneInfo"></div>'+
+    '<div class="tab-pane" id="paneLedger"></div>'+
+    '<div class="tab-pane" id="paneHistory"></div>';
+  document.getElementById('custClose').onclick=closeCustomer;
+  p.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(c,b.dataset.tab)));
+  renderInfoTab(c);
+  renderLedgerTab(c);
+  renderHistoryTab(c);
+  switchTab(c,activeTab||'info');
+}
+function switchTab(c,tab){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab));
+  document.getElementById('paneInfo').classList.toggle('active',tab==='info');
+  document.getElementById('paneLedger').classList.toggle('active',tab==='ledger');
+  document.getElementById('paneHistory').classList.toggle('active',tab==='history');
+}
+
+function renderInfoTab(c){
+  const pane=document.getElementById('paneInfo');
+  pane.innerHTML=
+    '<label>الاسم</label><input id="editName" type="text" value="'+esc(c.name)+'">'+
+    '<label>التليفون</label><input id="editPhone" type="text" value="'+esc(c.phone||'')+'">'+
+    '<label>حد الائتمان (اختياري)</label><input id="editCreditLimit" type="number" step="0.01" value="'+(c.credit_limit!=null?c.credit_limit:'')+'">'+
+    '<div class="msg" id="infoMsg"></div>'+
+    '<button type="button" id="saveInfoBtn">💾 حفظ التعديلات</button>';
+  document.getElementById('saveInfoBtn').onclick=()=>saveCustomerInfo(c);
+}
+async function saveCustomerInfo(c){
+  const msg=document.getElementById('infoMsg');
+  const name=document.getElementById('editName').value.trim();
+  const phone=document.getElementById('editPhone').value.trim()||null;
+  const creditLimitVal=document.getElementById('editCreditLimit').value;
+  const creditLimit=creditLimitVal===''?null:parseFloat(creditLimitVal);
+  if(!name){msg.textContent='اسم العميل مطلوب';msg.className='msg error';return}
+  msg.textContent='جاري الحفظ...';msg.className='msg';
+  const{error}=await sb.from('customers').update({name,phone,credit_limit:creditLimit}).eq('id',c.id);
+  if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
+  msg.textContent='تم الحفظ بنجاح';msg.className='msg ok';
+  await loadCustomers();
+  const updated=customersCache.find(x=>x.id===c.id);
+  if(updated)renderCustomerModal(updated,'info');
+}
+
+function renderLedgerTab(c){
+  const pane=document.getElementById('paneLedger');
+  const entries=ledgerCache.filter(l=>l.customer_id===c.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  const balance=c.balance;
+  let h='<div class="balance-box"><div style="font-size:11px;color:var(--text-muted)">الرصيد الحالي (المديونية)</div><div class="amount '+(balance>0?'pos':'zero')+'">'+balance.toFixed(2)+' ج.م</div></div>';
+  h+='<div style="display:flex;gap:8px;margin-bottom:14px"><input id="paymentAmount" type="number" step="0.01" min="0" placeholder="قيمة الدفعة" style="margin:0"><button type="button" id="addPaymentBtn" style="white-space:nowrap">تسجيل دفعة</button></div>';
+  h+='<div class="msg" id="ledgerMsg"></div>';
+  if(!entries.length){
+    h+='<p class="loading">مفيش حركات في الرصيد</p>';
+  }else{
+    entries.forEach(l=>{
+      const amt=Number(l.amount||0);
+      h+='<div class="ledger-row"><div><div>'+esc(l.note||(amt>0?'بيع آجل':'دفعة'))+'</div><div class="ledger-note">'+dFormat(l.created_at)+(l.profiles?' — '+esc(l.profiles.full_name):'')+'</div></div><div class="ledger-amt '+(amt>0?'debt':'pay')+'">'+(amt>0?'+':'')+amt.toFixed(2)+' ج</div></div>';
+    });
+  }
+  pane.innerHTML=h;
+  document.getElementById('addPaymentBtn').onclick=()=>addPayment(c);
+}
+async function addPayment(c){
+  const msg=document.getElementById('ledgerMsg');
+  const input=document.getElementById('paymentAmount');
+  const val=parseFloat(input.value);
+  if(!val||val<=0){msg.textContent='ادخل قيمة دفعة صحيحة';msg.className='msg error';return}
+  msg.textContent='جاري الحفظ...';msg.className='msg';
+  const{error}=await sb.from('customer_ledger').insert({customer_id:c.id,amount:-val,note:'دفعة من العميل',created_by:currentUser.id});
+  if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
+  await loadCustomers();
+  const updated=customersCache.find(x=>x.id===c.id);
+  if(updated){renderCustomerModal(updated,'ledger')}
+}
+
+function renderHistoryTab(c){
+  const pane=document.getElementById('paneHistory');
+  const rows=salesCache.filter(s=>s.customer_id===c.id);
+  const groups={};
+  rows.forEach(s=>{
+    const key=s.sale_group_id||('single-'+s.id);
+    if(!groups[key])groups[key]={key,created_at:s.created_at,items:0,total:0};
+    groups[key].items+=1;
+    groups[key].total+=Number(s.sale_price||0);
+  });
+  const list=Object.values(groups).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
+  let h='';
+  if(!list.length){
+    h='<p class="loading">مفيش مشتريات مسجلة لهذا العميل</p>';
+  }else{
+    list.forEach(g=>{
+      h+='<div class="purchase-row"><span>'+dFormat(g.created_at)+' — '+g.items+' صنف</span><span>'+g.total.toFixed(2)+' ج</span></div>';
+    });
+  }
+  pane.innerHTML=h;
+}
+
+document.getElementById('addCustomerBtn').addEventListener('click',()=>{
+  const blank={id:null,name:'عميل جديد',phone:'',credit_limit:null,balance:0};
+  document.getElementById('customerModal').classList.remove('hidden');
+  const p=document.getElementById('customerPaperContent');
+  p.innerHTML=
+    '<div class="cust-header"><h2>عميل جديد</h2><button type="button" class="cust-close" id="custClose">×</button></div>'+
+    '<label>الاسم</label><input id="newName" type="text" placeholder="اسم العميل">'+
+    '<label>التليفون</label><input id="newPhone" type="text" placeholder="رقم التليفون (اختياري)">'+
+    '<label>حد الائتمان (اختياري)</label><input id="newCreditLimit" type="number" step="0.01">'+
+    '<div class="msg" id="newMsg"></div>'+
+    '<button type="button" id="saveNewBtn">💾 حفظ</button>';
+  document.getElementById('custClose').onclick=closeCustomer;
+  document.getElementById('saveNewBtn').onclick=async()=>{
+    const msg=document.getElementById('newMsg');
+    const name=document.getElementById('newName').value.trim();
+    const phone=document.getElementById('newPhone').value.trim()||null;
+    const clVal=document.getElementById('newCreditLimit').value;
+    const creditLimit=clVal===''?null:parseFloat(clVal);
+    if(!name){msg.textContent='اسم العميل مطلوب';msg.className='msg error';return}
+    msg.textContent='جاري الحفظ...';msg.className='msg';
+    const{error}=await sb.from('customers').insert({name,phone,credit_limit:creditLimit});
+    if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
+    closeCustomer();
+    await loadCustomers();
+  };
+});
+</script></body></html>

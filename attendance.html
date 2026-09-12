@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>الحضور والانصراف - نظام إدارة الصيدلية</title>
+<script src="supabase-lib.js"></script><link rel="stylesheet" href="style.css">
+<style>
+.att-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.att-card{border:1px solid var(--border);border-radius:12px;padding:14px;background:var(--surface,#fff)}.att-card .n{font-size:22px;font-weight:800;color:var(--primary-dark)}.att-card .l{font-size:11px;color:var(--text-muted)}.att-actions{display:flex;gap:10px;flex-wrap:wrap}.att-actions button{margin:0}.danger{background:#dc2626!important;color:#fff!important}.ok{background:#059669!important;color:#fff!important}.warn{background:#d97706!important;color:#fff!important}.muted{color:var(--text-muted);font-size:12px}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}.three{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.scroll{overflow:auto}.status{display:inline-flex;padding:4px 8px;border-radius:14px;font-size:11px;font-weight:700;white-space:nowrap}.status.present{background:#dcfce7;color:#166534}.status.late{background:#fef3c7;color:#92400e}.status.absent{background:#fee2e2;color:#991b1b}.status.leave{background:#dbeafe;color:#1d4ed8}.status.off{background:#f1f5f9;color:#475569}.status.holiday{background:#ede9fe;color:#6d28d9}.status.pending{background:#fef3c7;color:#92400e}.status.approved{background:#dcfce7;color:#166534}.status.rejected{background:#fee2e2;color:#991b1b}.modal{position:fixed;inset:0;background:rgba(15,23,42,.4);display:none;align-items:center;justify-content:center;padding:16px;z-index:2000}.modal.open{display:flex}.modal-box{background:#fff;border-radius:14px;padding:18px;max-width:520px;width:100%;max-height:90vh;overflow:auto}.mini{font-size:11px}.request-box{border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:10px}.request-box summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:13px}.request-box summary::-webkit-details-marker{display:none}.request-box summary::before{content:'▸';margin-left:6px;color:var(--text-muted);transition:transform .15s}.request-box[open] summary::before{transform:rotate(90deg)}.request-head{display:flex;justify-content:space-between;gap:10px;align-items:center}.map-note{padding:10px;border-radius:9px;background:var(--bg);font-size:11px;margin-top:8px}.form-actions{display:flex;gap:8px;margin-top:10px}.form-actions button{margin:0;flex:1}.hidden{display:none!important}.report-summary{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin:14px 0}.report-summary .att-card{text-align:center}.report-table{min-width:1050px}.report-table th,.report-table td{white-space:nowrap}.table-actions{display:flex;gap:6px;flex-wrap:wrap}.table-actions button{margin:0;padding:7px 10px;font-size:12px}.empty{padding:18px;text-align:center;color:var(--text-muted)}
+.headerbar{display:flex;align-items:center;gap:10px}.notif-wrap{position:relative}.notif-btn{position:relative;background:transparent;border:1px solid var(--border);border-radius:10px;padding:6px 10px;cursor:pointer;font-size:16px;line-height:1}.notif-badge{position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:999px;font-size:10px;padding:1px 5px;font-weight:800;min-width:16px;text-align:center}.notif-panel{position:absolute;top:120%;right:0;background:#fff;border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.15);width:290px;max-height:360px;overflow:auto;z-index:2500;padding:8px}.notif-head{font-weight:800;padding:6px 8px;border-bottom:1px solid var(--border);margin-bottom:6px;display:flex;justify-content:space-between}.notif-item{padding:8px;border-radius:8px;margin-bottom:4px}.notif-item.clickable{cursor:pointer}.notif-item.clickable:hover{background:var(--bg)}
+details.card{padding:0;overflow:hidden}details.card>summary{cursor:pointer;list-style:none;padding:16px;margin:0;display:flex;align-items:center;gap:8px}details.card>summary::-webkit-details-marker{display:none}details.card>summary::before{content:'▸';color:var(--text-muted);transition:transform .15s;font-size:14px}details.card[open]>summary::before{transform:rotate(90deg)}details.card>summary h2{margin:0;display:inline}details.card>*:not(summary){margin:0 16px 16px}
+@media(max-width:800px){.att-grid{grid-template-columns:1fr 1fr}.two,.three{grid-template-columns:1fr}.att-card .n{font-size:19px}.report-summary{grid-template-columns:repeat(2,1fr)}.notif-panel{width:250px}}
+</style>
+</head>
+<body class="has-sidebar">
+<header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div class="headerbar"><span class="userinfo" id="userinfo"></span><div class="notif-wrap"><button id="notifBtn" class="notif-btn" type="button">🔔<span id="notifBadge" class="notif-badge hidden">0</span></button><div id="notifPanel" class="notif-panel hidden"><div class="notif-head"><span>الإشعارات</span></div><div id="notifList"></div></div></div><button id="logoutBtn">خروج</button></div></header>
+<nav><a href="inventory.html">المخزون</a><a href="sales.html">المبيعات</a><a href="invoices.html">🧾 الفواتير</a><a href="customers.html">👥 العملاء</a><a href="attendance.html" class="active">🕘 الحضور</a><a href="shortages.html">النواقص</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a></nav>
+<div id="sidebarOverlay" class="sidebar-overlay"></div>
+<div class="main-content"><div id="app">
+<div class="card"><h2>🕘 الحضور والانصراف</h2><div id="employeePanel" class="hidden"><div class="att-grid"><div class="att-card"><div class="l">الحالة</div><div class="n" id="todayStatus">—</div></div><div class="att-card"><div class="l">الحضور</div><div class="n" id="checkInText">—</div></div><div class="att-card"><div class="l">الانصراف</div><div class="n" id="checkOutText">—</div></div><div class="att-card"><div class="l">ساعات العمل</div><div class="n" id="workText">—</div></div></div><div class="att-actions"><button id="checkInBtn" class="ok">📍 تسجيل حضور</button><button id="checkOutBtn" class="warn">📍 تسجيل انصراف</button><button id="refreshBtn" class="secondary">تحديث</button></div><div id="locationMsg" class="map-note">يجب أن تكون داخل نطاق الصيدلية 10 متر، ودقة GPS لا تتجاوز الحد المسموح.</div></div></div>
+
+<div id="employeeRequests" class="hidden">
+<div class="card"><h2>📝 طلب جديد</h2><div class="two"><div><label>نوع الطلب</label><select id="reqType"><option value="leave">🏖️ إجازة</option><option value="late_permission">🕐 إذن تأخير</option><option value="early_leave">🚪 إذن انصراف مبكر</option></select></div><div><label>التاريخ</label><input id="reqStart" type="date"></div><div id="reqEndWrap"><label>إلى تاريخ</label><input id="reqEnd" type="date"></div><div id="reqTimeWrap"><label id="reqTimeLabel">الوقت المطلوب</label><input id="reqTime" type="time"></div></div><label>السبب <span class="muted">(إجباري - 5 أحرف على الأقل)</span></label><textarea id="reqReason" rows="3" minlength="5" placeholder="اكتب سبب الطلب بالتفصيل..."></textarea><div class="form-actions"><button id="submitReqBtn">إرسال الطلب</button></div><div id="reqMsg" class="msg"></div></div>
+<div class="card"><h2>📨 طلباتي</h2><div id="myRequests"><p class="loading">جاري التحميل...</p></div></div>
+</div>
+
+<div id="adminPanel" class="hidden">
+<details class="card collapsible" data-key="loc"><summary><h2>⚙️ إعدادات الحضور</h2></summary><div class="two"><div><label>خط عرض الصيدلية</label><input id="lat" type="number" step="any"></div><div><label>خط طول الصيدلية</label><input id="lng" type="number" step="any"></div><div><label>نطاق السماح (متر)</label><input id="radius" type="number" min="1" max="100" step="1" value="10"></div><div><label>أقصى دقة GPS مقبولة (متر)</label><input id="accuracy" type="number" min="1" max="100" step="1" value="30"></div></div><button id="saveLocation">حفظ موقع الصيدلية</button><button id="useCurrentLocation" class="secondary">استخدم موقعي الحالي</button><div id="locationAdminMsg" class="msg"></div></details>
+
+<details class="card collapsible" data-key="manual"><summary><h2>✏️ تعديل حضور يدوي</h2></summary><div class="two"><div><label>الموظف</label><select id="manualEmployee"></select></div><div><label>التاريخ</label><input id="manualDate" type="date"></div><div><label>وقت الحضور</label><input id="manualCheckIn" type="time"></div><div><label>وقت الانصراف</label><input id="manualCheckOut" type="time"></div><div><label>الحالة</label><select id="manualStatus"><option value="present">حاضر</option><option value="late">متأخر</option><option value="absent">غائب</option><option value="leave">إجازة</option><option value="holiday">عطلة</option></select></div></div><button id="saveManualAttendance">حفظ التعديل</button><div id="manualMsg" class="msg"></div><div class="muted" style="margin-top:6px">لتصحيح سجل حضور موظف نسي يسجل، أو خطأ في تحديد الموقع. لو وقت الانصراف أصغر من وقت الحضور (شيفت ليلي يعبر منتصف الليل)، بيتحسب الانصراف تلقائيًا في اليوم التالي.</div></details>
+
+<details class="card collapsible" data-key="live" open><summary><h2>🟢 الحاضرون الآن</h2></summary><button id="refreshLive" class="secondary">تحديث</button><div id="liveTable" class="scroll"></div></details>
+
+<details class="card collapsible" data-key="shifts"><summary><h2>🕐 الشيفتات</h2></summary><div class="three"><div><label>اسم الشيفت</label><input id="shiftName" placeholder="مثال: صباحي"></div><div><label>من</label><input id="shiftStart" type="time"></div><div><label>إلى</label><input id="shiftEnd" type="time"></div><div><label>السماح بالتأخير (دقيقة)</label><input id="shiftGrace" type="number" min="0" value="10"></div><div><label>حد الـ Overtime (دقيقة)</label><input id="shiftOtGrace" type="number" min="0" value="0"></div></div><input type="hidden" id="shiftEditId" value=""><button id="addShift">إضافة الشيفت</button> <button id="cancelShiftEdit" style="display:none">إلغاء التعديل</button><div id="shiftsTable" class="scroll"></div></details>
+
+<details class="card collapsible" data-key="schedule"><summary><h2>📅 جدول الموظفين الأسبوعي</h2></summary><div class="two"><div><label>الموظف</label><select id="scheduleEmployee"></select></div><div><label>الشيفت</label><select id="scheduleShift"></select></div></div><div class="two"><div><label>من تاريخ</label><input id="scheduleFrom" type="date"></div><div><label>إلى تاريخ (اختياري)</label><input id="scheduleTo" type="date"></div></div><input type="hidden" id="scheduleEditId" value=""><button id="addSchedule">تعيين الشيفت</button> <button id="cancelScheduleEdit" style="display:none">إلغاء التعديل</button><div id="scheduleTable" class="scroll"></div></details>
+
+<details class="card collapsible" data-key="requests"><summary><h2>📥 طلبات الموظفين</h2></summary><div class="three"><div><label>الحالة</label><select id="reqFilterStatus"><option value="">الكل</option><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select></div><div><label>الموظف</label><select id="reqFilterEmployee"><option value="">الكل</option></select></div><div><label>بحث بالسبب</label><input id="reqFilterSearch" placeholder="بحث..."></div></div><div id="adminRequests"><p class="loading">جاري التحميل...</p></div></details>
+
+<details class="card collapsible" data-key="report" open><summary><h2>📊 سجل الحضور</h2></summary><div class="two"><div><label>من تاريخ</label><input id="reportFrom" type="date"></div><div><label>إلى تاريخ</label><input id="reportTo" type="date"></div></div><button id="loadReport">عرض التقرير</button> <button id="exportReportBtn" class="secondary">⬇️ تصدير CSV</button><div id="reportSummary" class="report-summary"></div><div id="reportTable" class="scroll"></div></details>
+</div></div></div>
+<div id="decisionModal" class="modal"><div class="modal-box"><h3 id="decisionTitle">مراجعة الطلب</h3><p id="decisionDetails"></p><label>ملاحظة الأدمن <span class="muted">(اختيارية)</span></label><textarea id="adminNote" rows="4" placeholder="اكتب ملاحظتك على القرار..."></textarea><div class="form-actions"><button id="approveReq" class="ok">موافقة</button><button id="rejectReq" class="danger">رفض</button><button id="closeModal" class="secondary">إلغاء</button></div></div></div>
+<div id="editRequestModal" class="modal"><div class="modal-box"><h3>تعديل الطلب</h3><label>نوع الطلب</label><select id="editReqType"><option value="leave">🏖️ إجازة</option><option value="late_permission">🕐 إذن تأخير</option><option value="early_leave">🚪 إذن انصراف مبكر</option></select><div class="two"><div><label>من تاريخ</label><input id="editReqStart" type="date"></div><div id="editReqEndWrap"><label>إلى تاريخ</label><input id="editReqEnd" type="date"></div></div><div id="editReqTimeWrap"><label>الوقت</label><input id="editReqTime" type="time"></div><label>السبب</label><textarea id="editReqReason" rows="3"></textarea><label>الحالة</label><select id="editReqStatus"><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select><input type="hidden" id="editReqId"><div class="form-actions"><button id="saveEditReq" class="ok">حفظ</button><button id="closeEditReq" class="secondary">إلغاء</button></div><div id="editReqMsg" class="msg"></div></div></div>
+<script src="config.js"></script><script>
+let auth=null,isAdmin=false,selectedRequest=null,employees=[],shifts=[],schedules=[];
+let myRequestsData=[],allAdminRequests=[],lastReportRows=[],reportLoading=false,notifOpen=false;
+const days=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
+const $=id=>document.getElementById(id);
+function esc(v){const d=document.createElement('div');d.textContent=v??'';return d.innerHTML}
+function fmtTime(v){return v?new Date(v).toLocaleTimeString('ar-EG',{timeZone:'Africa/Cairo',hour:'2-digit',minute:'2-digit'}):'—'}
+function minsText(m){m=Number(m||0);return Math.floor(m/60)+'س '+(m%60)+'د'}
+function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo'}).format(new Date())}
+function dateText(v){return v?new Date(v+'T12:00:00').toLocaleDateString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit'}):'—'}
+function statusText(s){return {present:'حاضر',late:'متأخر',absent:'غائب',leave:'إجازة',off:'راحة',holiday:'عطلة'}[s]||s||'—'}
+function cairoOffset(dateStr){const probe=new Date(dateStr+'T12:00:00Z');const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Africa/Cairo',timeZoneName:'longOffset'}).formatToParts(probe);const tz=parts.find(p=>p.type==='timeZoneName')?.value||'GMT+03:00';return tz.replace('GMT','')||'+03:00'}
+function addDays(dateStr,days){const [y,m,d]=dateStr.split('-').map(Number);const dt=new Date(Date.UTC(y,m-1,d));dt.setUTCDate(dt.getUTCDate()+days);return dt.toISOString().slice(0,10)}
+function requestTypeText(t){return {leave:'إجازة',late_permission:'إذن تأخير',early_leave:'إذن انصراف مبكر'}[t]||t}
+function setMsg(id,text,ok=false){$(id).textContent=text;$(id).className='msg '+(ok?'success':'error')}
+
+/* ---------- قوائم مندلسة: حفظ الحالة (مفتوح/مقفول) لكل كارت ---------- */
+document.querySelectorAll('details.collapsible[data-key]').forEach(d=>{
+  const key='att_card_'+d.dataset.key;
+  const saved=localStorage.getItem(key);
+  if(saved==='open')d.open=true; else if(saved==='closed')d.open=false;
+  d.addEventListener('toggle',()=>{localStorage.setItem(key,d.open?'open':'closed')});
+});
+
+(async()=>{auth=await requireAuth();if(!auth)return;isAdmin=auth.profile.role==='admin';$('userinfo').textContent=auth.profile.full_name+' ('+(isAdmin?'أدمن':'موظف')+')';
+if(isAdmin){$('employeePanel').classList.add('hidden');$('employeeRequests').classList.add('hidden');$('adminPanel').classList.remove('hidden');await loadAdmin()}
+else{$('employeePanel').classList.remove('hidden');$('employeeRequests').classList.remove('hidden');await loadToday();await loadMyRequests()}
+setInterval(async()=>{try{if(isAdmin){await loadAdminRequests()}else{await loadMyRequests()}}catch(e){}},60000);
+})();
+
+$('logoutBtn').onclick=async()=>{await sb.auth.signOut();location.href='index.html'};
+$('refreshBtn').onclick=async()=>{await loadToday();if(!isAdmin)await loadMyRequests();else await loadAdminRequests()};
+
+/* ---------- إشعارات ---------- */
+function getSeenIds(){try{return new Set(JSON.parse(localStorage.getItem('att_seen_'+(auth?.user?.id||''))||'[]'))}catch(e){return new Set()}}
+function markAllSeen(){if(isAdmin||!auth)return;const ids=myRequestsData.filter(r=>r.status!=='pending').map(r=>r.id);localStorage.setItem('att_seen_'+auth.user.id,JSON.stringify(ids))}
+function updateNotifBadge(){let count=0;if(isAdmin){count=allAdminRequests.filter(r=>r.status==='pending').length}else{const seen=getSeenIds();count=myRequestsData.filter(r=>r.status!=='pending'&&!seen.has(r.id)).length}$('notifBadge').textContent=count;$('notifBadge').classList.toggle('hidden',count===0)}
+function renderNotifications(){
+  if(isAdmin){
+    const pending=allAdminRequests.filter(r=>r.status==='pending');
+    $('notifList').innerHTML=pending.length?pending.slice(0,15).map(r=>'<div class="notif-item clickable" data-id="'+r.id+'"><strong>'+esc(r.employee?.full_name||'موظف')+'</strong> — '+esc(requestTypeText(r.request_type))+'<div class="mini">'+dateText(r.start_date)+'</div></div>').join(''):'<div class="empty">لا توجد طلبات جديدة.</div>';
+  }else{
+    const decided=myRequestsData.filter(r=>r.status!=='pending').slice(0,15);
+    $('notifList').innerHTML=decided.length?decided.map(r=>'<div class="notif-item"><strong>'+esc(requestTypeText(r.request_type))+'</strong> — <span class="status '+esc(r.status)+'">'+esc({approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span><div class="mini">'+dateText(r.start_date)+'</div></div>').join(''):'<div class="empty">لا توجد إشعارات.</div>';
+    markAllSeen();updateNotifBadge();
+  }
+}
+$('notifBtn').onclick=e=>{e.stopPropagation();notifOpen=!notifOpen;$('notifPanel').classList.toggle('hidden',!notifOpen);if(notifOpen)renderNotifications()};
+document.addEventListener('click',e=>{if(notifOpen&&!e.target.closest('.notif-wrap')){notifOpen=false;$('notifPanel').classList.add('hidden')}});
+$('notifList').addEventListener('click',e=>{if(!isAdmin)return;const item=e.target.closest('.notif-item');if(item){notifOpen=false;$('notifPanel').classList.add('hidden');openDecision(item.dataset.id)}});
+
+/* ---------- حضور الموظف ---------- */
+async function loadToday(){const d=today();const y=addDays(d,-1);
+  // فيه شيفتات عابرة لنص الليل، فسجل الحضور المفتوح ممكن يكون تاريخه إمبارح لسه.
+  // ندور على أحدث سجل خلال اليومين (النهاردة أو إمبارح) بنفس منطق الـ RPC بتاع الانصراف.
+  const {data:rows,error}=await sb.from('attendance').select('*').eq('employee_id',auth.user.id).in('work_date',[y,d]).order('work_date',{ascending:false});
+  if(error){$('locationMsg').textContent='تعذر تحميل حضور اليوم: '+error.message;return}
+  const todayRow=(rows||[]).find(r=>r.work_date===d)||null;
+  const openRow=(rows||[]).find(r=>r.check_in&&!r.check_out)||null;
+  // لو فيه شيفت مفتوح من إمبارح لسه، ده اللي يُعرض ويُستخدم لزرار الانصراف. غير كده، سجل النهاردة.
+  const data=openRow||todayRow;
+  if(!data){$('todayStatus').textContent='لم يسجل';$('checkInText').textContent='—';$('checkOutText').textContent='—';$('workText').textContent='—';$('checkInBtn').disabled=false;$('checkOutBtn').disabled=true;return}
+  $('todayStatus').innerHTML='<span class="status '+esc(data.status)+'">'+esc(statusText(data.status))+'</span>';$('checkInText').textContent=fmtTime(data.check_in);$('checkOutText').textContent=fmtTime(data.check_out);$('workText').textContent=data.work_minutes!=null?minsText(data.work_minutes):'—';
+  // زرار الحضور يتقفل لو النهاردة فيه سجل حضور بالفعل (منعًا لتسجيل حضورين نفس اليوم).
+  $('checkInBtn').disabled=!!(todayRow&&todayRow.check_in);
+  $('checkOutBtn').disabled=!data.check_in||!!data.check_out}
+function getLocation(){return new Promise((resolve,reject)=>{if(!navigator.geolocation)return reject(new Error('المتصفح لا يدعم تحديد الموقع'));navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),e=>reject(new Error(e.code===1?'اسمح للموقع من إعدادات المتصفح':e.message)),{enableHighAccuracy:true,timeout:15000,maximumAge:0})})}
+async function record(action){const btn=action==='check_in'?$('checkInBtn'):$('checkOutBtn');btn.disabled=true;$('locationMsg').textContent='جاري تحديد موقعك والتحقق من أنك داخل نطاق الصيدلية...';try{const p=await getLocation();const {data,error}=await sb.rpc('record_attendance',{p_action:action,p_lat:p.lat,p_lng:p.lng,p_accuracy:p.accuracy});if(error)throw error;$('locationMsg').textContent='تم التسجيل بنجاح ✅ المسافة عن الصيدلية: '+Math.round(Number(data.distance||0))+' متر';await loadToday()}catch(e){$('locationMsg').textContent='❌ '+(e.message||'تعذر تسجيل العملية');btn.disabled=false;await loadToday()}}
+$('checkInBtn').onclick=()=>record('check_in');$('checkOutBtn').onclick=()=>record('check_out');
+
+/* ---------- طلبات الموظف ---------- */
+$('reqStart').value=today();$('reqEnd').value=today();
+$('reqType').onchange=()=>{const leave=$('reqType').value==='leave';$('reqEndWrap').classList.toggle('hidden',!leave);$('reqTimeWrap').classList.toggle('hidden',leave)};
+$('submitReqBtn').onclick=async()=>{
+  const btn=$('submitReqBtn');
+  const type=$('reqType').value,start=$('reqStart').value,end=type==='leave'?$('reqEnd').value:start,time=type==='leave'?null:$('reqTime').value,reason=$('reqReason').value.trim();
+  if(!start||!end)return setMsg('reqMsg','حدد التاريخ');
+  if(type!=='leave'&&!time)return setMsg('reqMsg','حدد الوقت المطلوب');
+  if(reason.length<5)return setMsg('reqMsg','السبب إجباري ويجب ألا يقل عن 5 أحرف');
+  if(end<start)return setMsg('reqMsg','تاريخ النهاية لا يمكن أن يسبق البداية');
+  btn.disabled=true;
+  try{
+    const {error}=await sb.from('attendance_requests').insert({employee_id:auth.user.id,request_type:type,start_date:start,end_date:end,requested_time:time,reason,status:'pending'});
+    if(error)return setMsg('reqMsg','تعذر إرسال الطلب: '+error.message);
+    $('reqReason').value='';$('reqTime').value='';setMsg('reqMsg','تم إرسال الطلب بنجاح ✅',true);await loadMyRequests();
+  }finally{btn.disabled=false}
+};
+async function loadMyRequests(){
+  if(isAdmin)return;
+  const {data,error}=await sb.from('attendance_requests').select('*').eq('employee_id',auth.user.id).order('created_at',{ascending:false});
+  if(error){$('myRequests').innerHTML='<p class="error">'+esc(error.message)+'</p>';return}
+  myRequestsData=data||[];
+  if(!myRequestsData.length){$('myRequests').innerHTML='<div class="empty">لا توجد طلبات حتى الآن.</div>';updateNotifBadge();return}
+  $('myRequests').innerHTML=myRequestsData.map(r=>'<details class="request-box"><summary><span><strong>'+esc(requestTypeText(r.request_type))+'</strong> — '+dateText(r.start_date)+(r.end_date&&r.end_date!==r.start_date?' → '+dateText(r.end_date):'')+'</span><span class="status '+esc(r.status)+'">'+esc({pending:'قيد المراجعة',approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span></summary><div class="mini">'+(r.requested_time?'⏰ '+esc(String(r.requested_time).slice(0,5)):'')+'</div><p>'+esc(r.reason)+'</p>'+(r.admin_note?'<div class="map-note">ملاحظة الأدمن: '+esc(r.admin_note)+'</div>':'')+'</details>').join('');
+  updateNotifBadge();
+}
+
+/* ---------- لوحة الأدمن ---------- */
+async function loadAdmin(){if(!isAdmin)return;await Promise.all([loadLocation(),loadEmployees(),loadShifts(),loadSchedules(),loadAdminRequests(),loadLiveNow()]);$('manualDate').value=today();$('reportFrom').value=today();$('reportTo').value=today();await loadReport()}
+
+async function loadLocation(){const {data,error}=await sb.from('attendance_settings').select('*').eq('id',true).maybeSingle();if(error||!data)return;$('lat').value=data.latitude??'';$('lng').value=data.longitude??'';$('radius').value=data.radius_meters??10;$('accuracy').value=data.max_gps_accuracy_meters??30}
+$('useCurrentLocation').onclick=async()=>{try{const p=await getLocation();$('lat').value=p.lat;$('lng').value=p.lng;$('locationAdminMsg').textContent='تم جلب الموقع الحالي. راجع الإحداثيات ثم احفظ.'}catch(e){setMsg('locationAdminMsg',e.message)}};
+$('saveLocation').onclick=async()=>{
+  const btn=$('saveLocation');
+  const latitude=Number($('lat').value),longitude=Number($('lng').value),radius=Number($('radius').value),accuracy=Number($('accuracy').value);
+  if(!Number.isFinite(latitude)||!Number.isFinite(longitude))return setMsg('locationAdminMsg','أدخل إحداثيات صحيحة');
+  if(latitude<-90||latitude>90)return setMsg('locationAdminMsg','خط العرض يجب أن يكون بين 90- و90');
+  if(longitude<-180||longitude>180)return setMsg('locationAdminMsg','خط الطول يجب أن يكون بين 180- و180');
+  if(radius<1||accuracy<1)return setMsg('locationAdminMsg','النطاق والدقة يجب أن يكونا أكبر من صفر');
+  btn.disabled=true;
+  try{
+    const {error}=await sb.from('attendance_settings').upsert({id:true,latitude,longitude,radius_meters:radius,max_gps_accuracy_meters:accuracy,updated_at:new Date().toISOString()});
+    if(error)return setMsg('locationAdminMsg','تعذر الحفظ: '+error.message);
+    setMsg('locationAdminMsg','تم حفظ إعدادات الموقع بنجاح ✅',true);
+  }finally{btn.disabled=false}
+};
+
+async function loadEmployees(){
+  const {data,error}=await sb.from('profiles').select('id,full_name,role').in('role',['employee','admin']).order('full_name',{ascending:true});
+  if(error){employees=[];$('scheduleEmployee').innerHTML='<option value="">تعذر تحميل الموظفين</option>';$('manualEmployee').innerHTML='<option value="">تعذر تحميل الموظفين</option>';return}
+  employees=data||[];
+  const opts=employees.map(e=>'<option value="'+e.id+'">'+esc(e.full_name)+(e.role==='admin'?' (أدمن)':'')+'</option>').join('')||'<option value="">لا يوجد موظفون</option>';
+  $('scheduleEmployee').innerHTML=opts;$('manualEmployee').innerHTML=opts;
+}
+
+/* ---------- تعديل حضور يدوي ---------- */
+$('saveManualAttendance').onclick=async()=>{
+  const btn=$('saveManualAttendance');
+  const employee_id=$('manualEmployee').value,work_date=$('manualDate').value,status=$('manualStatus').value;
+  const ci=$('manualCheckIn').value,co=$('manualCheckOut').value;
+  if(!employee_id||!work_date)return setMsg('manualMsg','اختر الموظف والتاريخ');
+  btn.disabled=true;
+  try{
+    const offset=cairoOffset(work_date);
+    const check_in=ci?work_date+'T'+ci+':00'+offset:null;
+    let check_out=null;
+    if(co){const outDate=(ci&&co<=ci)?addDays(work_date,1):work_date;check_out=outDate+'T'+co+':00'+offset}
+    if(check_in&&check_out&&new Date(check_out)<new Date(check_in))return setMsg('manualMsg','وقت الانصراف لا يمكن أن يسبق وقت الحضور');
+    let work_minutes=null;
+    if(check_in&&check_out)work_minutes=Math.max(0,Math.round((new Date(check_out)-new Date(check_in))/60000));
+    const payload={employee_id,work_date,check_in,check_out,status};
+    if(work_minutes!=null)payload.work_minutes=work_minutes;
+    const {error}=await sb.from('attendance').upsert(payload,{onConflict:'employee_id,work_date'});
+    if(error)return setMsg('manualMsg','تعذر الحفظ: '+error.message);
+    setMsg('manualMsg','تم حفظ التعديل بنجاح ✅',true);
+    if(employee_id===auth.user.id)await loadToday();
+    await loadLiveNow();await loadReport();
+  }finally{btn.disabled=false}
+};
+
+/* ---------- الحاضرون الآن ---------- */
+async function loadLiveNow(){
+  const d=today();
+  const {data,error}=await sb.from('attendance').select('employee_id,check_in,profiles!attendance_employee_id_fkey(full_name)').eq('work_date',d).not('check_in','is',null).is('check_out',null);
+  if(error){$('liveTable').innerHTML='<p class="error">تعذر تحميل البيانات: '+esc(error.message)+' (تأكد من اسم علاقة الـ foreign key بجدول attendance)</p>';return}
+  if(!data?.length){$('liveTable').innerHTML='<div class="empty">لا يوجد أحد حاضر الآن.</div>';return}
+  $('liveTable').innerHTML='<table><thead><tr><th>الموظف</th><th>وقت الحضور</th></tr></thead><tbody>'+data.map(r=>'<tr><td>'+esc(r.profiles?.full_name||'—')+'</td><td>'+fmtTime(r.check_in)+'</td></tr>').join('')+'</tbody></table>';
+}
+$('refreshLive').onclick=loadLiveNow;
+
+/* ---------- الشيفتات ---------- */
+async function loadShifts(){
+  const {data,error}=await sb.from('attendance_shifts').select('*').order('active',{ascending:false}).order('name',{ascending:true});
+  if(error){shifts=[];return}
+  shifts=data||[];
+  $('scheduleShift').innerHTML=shifts.filter(s=>s.active).map(s=>'<option value="'+s.id+'">'+esc(s.name)+' ('+String(s.start_time).slice(0,5)+' - '+String(s.end_time).slice(0,5)+')</option>').join('')||'<option value="">لا توجد شيفتات</option>';
+  $('shiftsTable').innerHTML=shifts.length?'<table><thead><tr><th>الاسم</th><th>الوقت</th><th>السماح</th><th>الإضافي</th><th>الحالة</th><th>إجراءات</th></tr></thead><tbody>'+shifts.map(s=>'<tr><td>'+esc(s.name)+'</td><td>'+String(s.start_time).slice(0,5)+' - '+String(s.end_time).slice(0,5)+'</td><td>'+Number(s.grace_minutes||0)+' د</td><td>'+Number(s.overtime_grace_minutes||0)+' د</td><td><span class="status '+(s.active?'approved':'off')+'">'+(s.active?'نشط':'متوقف')+'</span></td><td><button class="editShiftBtn" data-id="'+s.id+'">تعديل</button> <button class="deleteShiftBtn" data-id="'+s.id+'">حذف</button></td></tr>').join('')+'</tbody></table>':'<div class="empty">لا توجد شيفتات.</div>';
+}
+$('shiftsTable').addEventListener('click',e=>{
+  const eb=e.target.closest('.editShiftBtn'),db=e.target.closest('.deleteShiftBtn');
+  if(eb){const s=shifts.find(x=>String(x.id)===eb.dataset.id);if(s)startEditShift(s)}
+  if(db)deleteShift(db.dataset.id);
+});
+function startEditShift(s){$('shiftEditId').value=s.id;$('shiftName').value=s.name;$('shiftStart').value=String(s.start_time).slice(0,5);$('shiftEnd').value=String(s.end_time).slice(0,5);$('shiftGrace').value=Number(s.grace_minutes||0);$('shiftOtGrace').value=Number(s.overtime_grace_minutes||0);$('addShift').textContent='حفظ التعديل';$('cancelShiftEdit').style.display='inline-block'}
+async function deleteShift(id){if(!confirm('تأكيد حذف هذا الشيفت؟ لن يمكن حذفه إذا كان مستخدمًا في تعيينات أو سجلات حضور.'))return;const {error}=await sb.from('attendance_shifts').delete().eq('id',id);if(error)return alert('تعذر الحذف: '+error.message);await loadShifts()}
+$('addShift').onclick=async()=>{
+  const btn=$('addShift');
+  const name=$('shiftName').value.trim(),start=$('shiftStart').value,end=$('shiftEnd').value;
+  const grace=Math.max(0,Number($('shiftGrace').value||0)),ot=Math.max(0,Number($('shiftOtGrace').value||0));
+  const editId=$('shiftEditId').value;
+  if(!name||!start||!end)return alert('أكمل بيانات الشيفت');
+  if(start===end)return alert('وقت البداية والنهاية لا يمكن أن يكونا متطابقين');
+  btn.disabled=true;
+  try{
+    if(editId){const {error}=await sb.from('attendance_shifts').update({name,start_time:start,end_time:end,grace_minutes:grace,overtime_grace_minutes:ot}).eq('id',editId);if(error)return alert('تعذر تعديل الشيفت: '+error.message);resetShiftForm()}
+    else{const {error}=await sb.from('attendance_shifts').insert({name,start_time:start,end_time:end,grace_minutes:grace,overtime_grace_minutes:ot,active:true});if(error)return alert('تعذر إضافة الشيفت: '+error.message);$('shiftName').value=''}
+    await loadShifts();
+  }finally{btn.disabled=false}
+};
+function resetShiftForm(){$('shiftEditId').value='';$('shiftName').value='';$('shiftStart').value='';$('shiftEnd').value='';$('shiftGrace').value='10';$('shiftOtGrace').value='0';$('addShift').textContent='إضافة الشيفت';$('cancelShiftEdit').style.display='none'}
+$('cancelShiftEdit').onclick=resetShiftForm;
+
+/* ---------- جدول الموظفين الأسبوعي (تعديل + حذف) ---------- */
+$('addSchedule').onclick=async()=>{
+  const btn=$('addSchedule');
+  const employee_id=$('scheduleEmployee').value,shift_id=$('scheduleShift').value,weekday=null,effective_from=$('scheduleFrom').value,effective_to=$('scheduleTo').value;
+  const editId=$('scheduleEditId').value;
+  if(!employee_id||!shift_id||!effective_from||!effective_to)return alert('حدد الموظف والشيفت ومن تاريخ وإلى تاريخ');
+  if(effective_to<effective_from)return alert('تاريخ النهاية لا يمكن أن يسبق البداية');
+  btn.disabled=true;
+  try{
+    if(editId){
+      const {error}=await sb.from('employee_shift_schedule').update({employee_id,shift_id,weekday,effective_from,effective_to}).eq('id',editId);
+      if(error)return alert('تعذر تعديل التعيين: '+error.message);
+      resetScheduleForm();
+    }else{
+      const {error}=await sb.from('employee_shift_schedule').insert({employee_id,shift_id,weekday,effective_from,effective_to});
+      if(error)return alert('تعذر تعيين الشيفت: '+error.message);
+    }
+    await loadSchedules();
+  }finally{btn.disabled=false}
+};
+function resetScheduleForm(){$('scheduleEditId').value='';$('scheduleFrom').value='';$('scheduleTo').value='';$('addSchedule').textContent='تعيين الشيفت';$('cancelScheduleEdit').style.display='none'}
+$('cancelScheduleEdit').onclick=resetScheduleForm;
+async function loadSchedules(){
+  const {data,error}=await sb.from('employee_shift_schedule').select('id,employee_id,shift_id,weekday,effective_from,effective_to,profiles!employee_shift_schedule_employee_id_fkey(full_name),attendance_shifts!employee_shift_schedule_shift_id_fkey(name,start_time,end_time)').order('effective_from',{ascending:false});
+  if(error){$('scheduleTable').innerHTML='<p class="error">'+esc(error.message)+'</p>';return}
+  schedules=data||[];
+  if(!schedules.length){$('scheduleTable').innerHTML='<div class="empty">لا توجد جداول محددة.</div>';return}
+  $('scheduleTable').innerHTML='<table><thead><tr><th>الموظف</th><th>الشيفت</th><th>من</th><th>إلى</th><th>إجراءات</th></tr></thead><tbody>'+schedules.map(r=>'<tr><td>'+esc(r.profiles?.full_name||'—')+'</td><td>'+esc(r.attendance_shifts?.name||'—')+'</td><td>'+dateText(r.effective_from)+'</td><td>'+dateText(r.effective_to)+'</td><td><button class="editScheduleBtn" data-id="'+r.id+'">تعديل</button> <button class="deleteScheduleBtn" data-id="'+r.id+'">حذف</button></td></tr>').join('')+'</tbody></table>';
+}
+$('scheduleTable').addEventListener('click',e=>{
+  const eb=e.target.closest('.editScheduleBtn'),db=e.target.closest('.deleteScheduleBtn');
+  if(eb){const s=schedules.find(x=>String(x.id)===eb.dataset.id);if(s)startEditSchedule(s)}
+  if(db)deleteSchedule(db.dataset.id);
+});
+function startEditSchedule(s){$('scheduleEditId').value=s.id;$('scheduleEmployee').value=s.employee_id;$('scheduleShift').value=s.shift_id;$('scheduleFrom').value=s.effective_from;$('scheduleTo').value=s.effective_to;$('addSchedule').textContent='حفظ التعديل';$('cancelScheduleEdit').style.display='inline-block'}
+async function deleteSchedule(id){if(!confirm('تأكيد حذف هذا التعيين؟'))return;const {error}=await sb.from('employee_shift_schedule').delete().eq('id',id);if(error)return alert('تعذر الحذف: '+error.message);await loadSchedules()}
+
+/* ---------- طلبات الموظفين (فلاتر + قائمة مندلسة + تعديل/حذف) ---------- */
+async function loadAdminRequests(){
+  if(!isAdmin)return;
+  const {data,error}=await sb.from('attendance_requests').select('*,employee:profiles!attendance_requests_employee_id_fkey(full_name)').order('created_at',{ascending:false});
+  if(error){$('adminRequests').innerHTML='<p class="error">تعذر تحميل الطلبات: '+esc(error.message)+'</p>';return}
+  allAdminRequests=data||[];
+  populateEmployeeFilter();renderAdminRequests();updateNotifBadge();
+}
+function populateEmployeeFilter(){
+  const names=[...new Set(allAdminRequests.map(r=>r.employee?.full_name).filter(Boolean))];
+  const cur=$('reqFilterEmployee').value;
+  $('reqFilterEmployee').innerHTML='<option value="">الكل</option>'+names.map(n=>'<option value="'+esc(n)+'">'+esc(n)+'</option>').join('');
+  $('reqFilterEmployee').value=cur;
+}
+function renderAdminRequests(){
+  const statusF=$('reqFilterStatus').value,empF=$('reqFilterEmployee').value,searchF=$('reqFilterSearch').value.trim().toLowerCase();
+  const filtered=allAdminRequests.filter(r=>(!statusF||r.status===statusF)&&(!empF||r.employee?.full_name===empF)&&(!searchF||(r.reason||'').toLowerCase().includes(searchF)));
+  if(!filtered.length){$('adminRequests').innerHTML='<div class="empty">لا توجد طلبات مطابقة.</div>';return}
+  $('adminRequests').innerHTML=filtered.map(r=>'<details class="request-box"><summary><span><strong>'+esc(r.employee?.full_name||'موظف')+'</strong> — '+esc(requestTypeText(r.request_type))+' — '+dateText(r.start_date)+'</span><span class="status '+esc(r.status)+'">'+esc({pending:'قيد المراجعة',approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span></summary><div class="mini">'+(r.end_date&&r.end_date!==r.start_date?' → '+dateText(r.end_date):'')+(r.requested_time?' · ⏰ '+esc(String(r.requested_time).slice(0,5)):'')+'</div><p>'+esc(r.reason)+'</p>'+(r.admin_note?'<div class="map-note">ملاحظة القرار: '+esc(r.admin_note)+'</div>':'')+'<div class="table-actions">'+(r.status==='pending'?'<button class="ok reviewReqBtn" data-id="'+r.id+'">مراجعة الطلب</button>':'')+'<button class="secondary editReqBtn" data-id="'+r.id+'">تعديل</button><button class="danger deleteReqBtn" data-id="'+r.id+'">حذف</button></div></details>').join('');
+}
+$('reqFilterStatus').onchange=renderAdminRequests;$('reqFilterEmployee').onchange=renderAdminRequests;$('reqFilterSearch').oninput=renderAdminRequests;
+$('adminRequests').addEventListener('click',e=>{
+  const rb=e.target.closest('.reviewReqBtn');if(rb)openDecision(rb.dataset.id);
+  const eb=e.target.closest('.editReqBtn');if(eb)openEditRequest(eb.dataset.id);
+  const db=e.target.closest('.deleteReqBtn');if(db)deleteRequest(db.dataset.id);
+});
+async function deleteRequest(id){if(!confirm('تأكيد حذف هذا الطلب نهائيًا؟ لا يمكن التراجع عن ذلك.'))return;const {error}=await sb.from('attendance_requests').delete().eq('id',id);if(error)return alert('تعذر الحذف: '+error.message);await loadAdminRequests()}
+
+window.openDecision=async id=>{
+  const {data,error}=await sb.from('attendance_requests').select('*,employee:profiles!attendance_requests_employee_id_fkey(full_name)').eq('id',id).single();
+  if(error)return alert(error.message);
+  selectedRequest=data;
+  $('decisionTitle').textContent='مراجعة طلب '+(data.employee?.full_name||'');
+  $('decisionDetails').innerHTML='<strong>'+esc(requestTypeText(data.request_type))+'</strong><br>📅 '+dateText(data.start_date)+(data.end_date&&data.end_date!==data.start_date?' → '+dateText(data.end_date):'')+(data.requested_time?'<br>⏰ '+esc(String(data.requested_time).slice(0,5)):'')+'<br><br>'+esc(data.reason);
+  $('adminNote').value='';$('decisionModal').classList.add('open');
+};
+async function decide(status){
+  if(!selectedRequest)return;
+  const note=$('adminNote').value.trim();
+  const {error}=await sb.from('attendance_requests').update({status,admin_note:note||null,reviewed_by:auth.user.id,reviewed_at:new Date().toISOString()}).eq('id',selectedRequest.id).eq('status','pending');
+  if(error)return alert('تعذر حفظ القرار: '+error.message);
+  $('decisionModal').classList.remove('open');selectedRequest=null;
+  await loadAdminRequests();await loadReport();
+}
+$('approveReq').onclick=()=>decide('approved');$('rejectReq').onclick=()=>decide('rejected');
+$('closeModal').onclick=()=>{$('decisionModal').classList.remove('open');selectedRequest=null};
+$('decisionModal').onclick=e=>{if(e.target===$('decisionModal'))$('closeModal').click()};
+
+/* ---------- تعديل طلب كامل (نوع/تواريخ/سبب/حالة) ---------- */
+window.openEditRequest=id=>{
+  const r=allAdminRequests.find(x=>String(x.id)===String(id));
+  if(!r)return;
+  $('editReqId').value=r.id;
+  $('editReqType').value=r.request_type;
+  $('editReqStart').value=r.start_date;
+  $('editReqEnd').value=r.end_date||r.start_date;
+  $('editReqTime').value=r.requested_time?String(r.requested_time).slice(0,5):'';
+  $('editReqReason').value=r.reason||'';
+  $('editReqStatus').value=r.status;
+  const leave=$('editReqType').value==='leave';
+  $('editReqEndWrap').classList.toggle('hidden',!leave);
+  $('editReqTimeWrap').classList.toggle('hidden',leave);
+  $('editReqMsg').textContent='';$('editReqMsg').className='msg';
+  $('editRequestModal').classList.add('open');
+};
+$('editReqType').onchange=()=>{const leave=$('editReqType').value==='leave';$('editReqEndWrap').classList.toggle('hidden',!leave);$('editReqTimeWrap').classList.toggle('hidden',leave)};
+$('closeEditReq').onclick=()=>$('editRequestModal').classList.remove('open');
+$('editRequestModal').onclick=e=>{if(e.target===$('editRequestModal'))$('closeEditReq').click()};
+$('saveEditReq').onclick=async()=>{
+  const btn=$('saveEditReq');
+  const id=$('editReqId').value;
+  const type=$('editReqType').value,start=$('editReqStart').value,end=type==='leave'?$('editReqEnd').value:start,time=type==='leave'?null:$('editReqTime').value,reason=$('editReqReason').value.trim(),status=$('editReqStatus').value;
+  if(!start||!end)return setMsg('editReqMsg','حدد التاريخ');
+  if(type!=='leave'&&!time)return setMsg('editReqMsg','حدد الوقت');
+  if(reason.length<5)return setMsg('editReqMsg','السبب يجب ألا يقل عن 5 أحرف');
+  if(end<start)return setMsg('editReqMsg','تاريخ النهاية لا يمكن أن يسبق البداية');
+  btn.disabled=true;
+  try{
+    const payload={request_type:type,start_date:start,end_date:end,requested_time:time,reason,status};
+    if(status!=='pending'){payload.reviewed_by=auth.user.id;payload.reviewed_at=new Date().toISOString()}else{payload.reviewed_by=null;payload.reviewed_at=null;payload.admin_note=null}
+    const {error}=await sb.from('attendance_requests').update(payload).eq('id',id);
+    if(error)return setMsg('editReqMsg','تعذر الحفظ: '+error.message);
+    $('editRequestModal').classList.remove('open');
+    await loadAdminRequests();
+  }finally{btn.disabled=false}
+};
+
+/* ---------- التقرير + تصدير CSV ---------- */
+$('loadReport').onclick=loadReport;
+async function loadReport(){
+  if(!isAdmin||reportLoading)return;
+  const from=$('reportFrom').value,to=$('reportTo').value;
+  if(!from||!to)return;
+  if(to<from)return alert('تاريخ النهاية لا يمكن أن يسبق البداية');
+  const daysCount=Math.floor((new Date(to+'T00:00:00')-new Date(from+'T00:00:00'))/86400000)+1;
+  if(daysCount>366)return alert('أقصى فترة للتقرير 366 يوم');
+  reportLoading=true;$('loadReport').disabled=true;
+  $('reportTable').innerHTML='<p class="loading">جاري تحميل التقرير...</p>';$('reportSummary').innerHTML='';
+  try{
+    const {data,error}=await sb.rpc('get_attendance_report',{p_from:from,p_to:to});
+    if(error){$('reportTable').innerHTML='<p class="error">تعذر تحميل التقرير: '+esc(error.message)+'</p>';return}
+    const rows=data||[];lastReportRows=rows;
+    const counts={present:0,late:0,absent:0,leave:0,off:0};
+    rows.forEach(r=>{if(counts[r.status]!==undefined)counts[r.status]++});
+    $('reportSummary').innerHTML=[['present','حاضر'],['late','متأخر'],['absent','غائب'],['leave','إجازة'],['off','راحة']].map(([k,l])=>'<div class="att-card"><div class="n">'+counts[k]+'</div><div class="l">'+l+'</div></div>').join('');
+    if(!rows.length){$('reportTable').innerHTML='<div class="empty">لا توجد بيانات في الفترة المحددة.</div>';return}
+    $('reportTable').innerHTML='<table class="report-table"><thead><tr><th>التاريخ</th><th>الموظف</th><th>الشيفت</th><th>الحالة</th><th>الحضور</th><th>الانصراف</th><th>التأخير</th><th>وصول مبكر</th><th>انصراف مبكر</th><th>إضافي</th><th>ساعات العمل</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+dateText(r.work_date)+'</td><td>'+esc(r.employee_name||'—')+'</td><td>'+esc(r.shift_name||'راحة')+(r.shift_start?' ('+String(r.shift_start).slice(0,5)+' - '+String(r.shift_end).slice(0,5)+')':'')+'</td><td><span class="status '+esc(r.status)+'">'+esc(statusText(r.status))+'</span></td><td>'+fmtTime(r.check_in)+'</td><td>'+fmtTime(r.check_out)+'</td><td>'+Number(r.late_minutes||0)+' د</td><td>'+Number(r.early_arrival_minutes||0)+' د</td><td>'+Number(r.early_leave_minutes||0)+' د</td><td>'+Number(r.overtime_minutes||0)+' د</td><td>'+((r.work_minutes!=null)?minsText(r.work_minutes):'—')+'</td></tr>').join('')+'</tbody></table>';
+  }finally{reportLoading=false;$('loadReport').disabled=false}
+}
+$('exportReportBtn').onclick=()=>{
+  if(!lastReportRows.length)return alert('لا توجد بيانات لتصديرها. اعرض التقرير أولاً.');
+  const headers=['التاريخ','الموظف','الشيفت','الحالة','الحضور','الانصراف','التأخير(د)','وصول مبكر(د)','انصراف مبكر(د)','إضافي(د)','ساعات العمل(د)'];
+  const rows=lastReportRows.map(r=>[dateText(r.work_date),r.employee_name||'',r.shift_name||'راحة',statusText(r.status),fmtTime(r.check_in),fmtTime(r.check_out),r.late_minutes||0,r.early_arrival_minutes||0,r.early_leave_minutes||0,r.overtime_minutes||0,r.work_minutes??'']);
+  const csv=[headers,...rows].map(row=>row.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='attendance_report_'+$('reportFrom').value+'_'+$('reportTo').value+'.csv';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);
+};
+</script>
+</body></html>
