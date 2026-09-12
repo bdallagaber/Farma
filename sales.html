@@ -407,8 +407,8 @@
       </select>
     </div>
 
-    <div id="customer_wrap" class="hidden">
-      <label>العميل</label>
+    <div id="customer_wrap">
+      <label>العميل (اختياري للكاش، إجباري للآجل)</label>
 
       <select id="s_customer">
         <option value="">-- اختار عميل --</option>
@@ -432,6 +432,16 @@
         <input type="text" id="s_new_customer_phone">
       </div>
 
+    </div>
+
+    <div class="full-width">
+      <label>ملاحظات على الفاتورة (اختياري)</label>
+      <textarea
+        id="s_invoice_notes"
+        rows="2"
+        placeholder="أي ملاحظة عن الفاتورة دي..."
+        style="width:100%;"
+      ></textarea>
     </div>
 
   </div>
@@ -1414,14 +1424,6 @@ document.getElementById(
 ).addEventListener(
   'change',
   e => {
-
-    document.getElementById(
-      'customer_wrap'
-    ).classList.toggle(
-      'hidden',
-      e.target.value !== 'credit'
-    );
-
 
     document.getElementById(
       'newCustomerRow'
@@ -2666,18 +2668,6 @@ window.updateCartUnit =
       return;
     }
 
-    /*
-     * عند تغيير الوحدة داخل السلة:
-     * نحافظ على الرقم الذي كتبه المستخدم
-     * (مثلاً 1) ونغيّر الوحدة نفسها.
-     *
-     * مثال:
-     * 1 قطعة  ->  1 شريط
-     * 1 قطعة  ->  1 علبة
-     *
-     * وبالتالي لا يحدث Error لمجرد تغيير
-     * وحدة البيع.
-     */
     const quantity =
       Number(item.quantity) || 1;
 
@@ -2692,11 +2682,6 @@ window.updateCartUnit =
       quantity *
       newRatio;
 
-    /*
-     * التأكد من أن الكمية الجديدة متاحة
-     * مع مراعاة الكميات الموجودة بالفعل
-     * في باقي السلة.
-     */
     const otherCartQty =
       cart
         .reduce(
@@ -2741,10 +2726,6 @@ window.updateCartUnit =
       return;
     }
 
-    /*
-     * سعر الوحدة الجديدة يُحسب من
-     * سعر أصغر وحدة × عدد الأصغر داخلها.
-     */
     const oldRatio =
       Number(item.ratioToSmall) || 1;
 
@@ -3104,92 +3085,122 @@ document.getElementById(
         null;
 
 
-      /*
-       * البيع الآجل
-       */
+      const custSel =
+        document.getElementById(
+          's_customer'
+        ).value;
+
+
       if (
+        custSel ===
+        '__new__'
+      ) {
+
+        const newName =
+          document.getElementById(
+            's_new_customer_name'
+          ).value.trim();
+
+
+        const newPhone =
+          document.getElementById(
+            's_new_customer_phone'
+          ).value.trim();
+
+
+        if (!newName) {
+
+          throw new Error(
+            'لازم تكتب اسم العميل الجديد'
+          );
+
+        }
+
+
+        const {
+          data: newCust,
+          error: custErr
+        } =
+          await sb
+            .from('customers')
+            .insert({
+              name:
+                newName,
+
+              phone:
+                newPhone ||
+                null
+            })
+            .select()
+            .single();
+
+
+        if (custErr) {
+          throw custErr;
+        }
+
+
+        customerId =
+          newCust.id;
+
+      } else if (
+        custSel
+      ) {
+
+        customerId =
+          custSel;
+
+      } else if (
         saleType ===
         'credit'
       ) {
 
-        const custSel =
-          document.getElementById(
-            's_customer'
-          ).value;
-
-
-        if (
-          custSel ===
-          '__new__'
-        ) {
-
-          const newName =
-            document.getElementById(
-              's_new_customer_name'
-            ).value.trim();
-
-
-          const newPhone =
-            document.getElementById(
-              's_new_customer_phone'
-            ).value.trim();
-
-
-          if (!newName) {
-
-            throw new Error(
-              'لازم تكتب اسم العميل الجديد'
-            );
-
-          }
-
-
-          const {
-            data: newCust,
-            error: custErr
-          } =
-            await sb
-              .from('customers')
-              .insert({
-                name:
-                  newName,
-
-                phone:
-                  newPhone ||
-                  null
-              })
-              .select()
-              .single();
-
-
-          if (custErr) {
-            throw custErr;
-          }
-
-
-          customerId =
-            newCust.id;
-
-        } else if (
-          custSel
-        ) {
-
-          customerId =
-            custSel;
-
-        } else {
-
-          throw new Error(
-            'اختار عميل أو أضف عميل جديد للبيع الآجل'
-          );
-
-        }
+        throw new Error(
+          'اختار عميل أو أضف عميل جديد للبيع الآجل'
+        );
 
       }
 
 
       const groupId =
         crypto.randomUUID();
+
+
+      const invoiceNotes =
+        document.getElementById(
+          's_invoice_notes'
+        ).value.trim();
+
+
+      /*
+       * رأس الفاتورة
+       */
+      const {
+        error: invoiceHeaderError
+      } =
+        await sb
+          .from('invoices')
+          .insert({
+
+            sale_group_id:
+              groupId,
+
+            customer_id:
+              customerId,
+
+            notes:
+              invoiceNotes ||
+              null,
+
+            created_by:
+              currentUser.id
+
+          });
+
+
+      if (invoiceHeaderError) {
+        throw invoiceHeaderError;
+      }
 
 
       /*
@@ -3303,9 +3314,13 @@ document.getElementById(
 
 
       /*
-       * دفتر العميل
+       * دفتر العميل — بس للبيع الآجل
        */
-      if (customerId) {
+      if (
+        customerId &&
+        saleType ===
+        'credit'
+      ) {
 
         await sb
           .from('customer_ledger')
@@ -3371,6 +3386,25 @@ document.getElementById(
 
       document.getElementById(
         's_new_customer_phone'
+      ).value =
+        '';
+
+
+      document.getElementById(
+        's_customer'
+      ).value =
+        '';
+
+
+      document.getElementById(
+        'newCustomerRow'
+      ).classList.add(
+        'hidden'
+      );
+
+
+      document.getElementById(
+        's_invoice_notes'
       ).value =
         '';
 
