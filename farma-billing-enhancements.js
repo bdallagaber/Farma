@@ -49,14 +49,17 @@
     if(typeof window.renderInvoices!=='function')return;
     window.__farmaBillingInvoiceEnhancementInstalled=true;
 
-    const [{data:metaRows},{data:customers}]=await Promise.all([
+    const [{data:metaRows},{data:customers},{data:ledgerRows}]=await Promise.all([
       sb.from('invoices').select('sale_group_id,customer_id,notes,sale_type,subtotal_amount,discount_type,discount_value,discount_amount,total_amount,paid_amount'),
-      sb.from('customers').select('id,name').order('name')
+      sb.from('customers').select('id,name').order('name'),
+      sb.from('customer_ledger').select('customer_id,amount')
     ]);
     const metaByGroup={};
     (metaRows||[]).forEach(r=>{metaByGroup[r.sale_group_id]=r;});
     const customerById={};
     (customers||[]).forEach(c=>{customerById[c.id]=c.name;});
+    const ledgerBalanceByCustomer={};
+    (ledgerRows||[]).forEach(r=>{ledgerBalanceByCustomer[r.customer_id]=(ledgerBalanceByCustomer[r.customer_id]||0)+Number(r.amount||0);});
 
     function metaFor(inv){
       const m=metaByGroup[inv.sale_group_id];
@@ -91,7 +94,7 @@
       for(const [id,label] of [['billingCount','عدد الفواتير'],['billingSubtotal','قبل الخصم'],['billingDiscount','إجمالي الخصومات'],['billingTotal','بعد الخصم'],['billingOutstanding','المتبقي آجل']]){
         old.insertAdjacentHTML('beforeend','<div class="summary-card"><div class="summary-label">'+label+'</div><div class="summary-value money" id="'+id+'">0.00 ج.م</div></div>');
       }
-      old.insertAdjacentHTML('afterend','<div id="debtorsPanel" class="debtors-panel hidden"><div class="debtors-head"><strong>👥 العملاء عليهم آجل</strong><span id="debtorsCount">0</span></div><div id="debtorsList"></div></div>');
+      old.insertAdjacentHTML('afterend','<div id="debtorsPanel" class="debtors-panel hidden"><div class="debtors-head"><strong>👥 العملاء عليهم رصيد آجل</strong><span id="debtorsCount">0</span></div><div id="debtorsList"></div></div>');
     }
 
     if(!document.getElementById('farmaBillingEnhancementStyle')){
@@ -170,6 +173,7 @@
       const panel=document.getElementById('debtorsPanel');if(!panel)return;
       const map={};
       (typeof allInvoices!=='undefined'?allInvoices:[]).forEach(inv=>{const m=metaFor(inv);if(m.sale_type!=='credit')return;const remaining=Math.max(0,Number(m.total_amount||inv.total||0)-Number(m.paid_amount||0));if(remaining<=0.005)return;const id=m.customer_id||inv.customer_id;if(!id)return;if(!map[id])map[id]={name:customerById[id]||inv.customer||'—',amount:0};map[id].amount+=remaining;});
+      Object.entries(ledgerBalanceByCustomer).forEach(([id,balance])=>{if(balance<=0.005)return;if(!map[id])map[id]={name:customerById[id]||'—',amount:0};map[id].amount=Math.max(map[id].amount,balance);});
       const rows=Object.values(map).sort((a,b)=>b.amount-a.amount);
       panel.classList.toggle('hidden',rows.length===0);
       document.getElementById('debtorsCount').textContent=rows.length.toLocaleString('ar-EG');
