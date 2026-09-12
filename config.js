@@ -65,7 +65,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
 });
 
 (function loadBillingEnhancements(){
-  if(!/(^|\\/)(sales|invoices)\\.html$/i.test(location.pathname))return;
+  if(!/(^|\/)(sales|invoices)\.html$/i.test(location.pathname))return;
   if(document.getElementById('farmaBillingEnhancements'))return;
   const script=document.createElement('script');
   script.id='farmaBillingEnhancements';
