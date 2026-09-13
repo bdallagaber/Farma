@@ -5716,42 +5716,58 @@ document
 
       await ensureXLSX();
 
-      const {
-        data: products,
-        error
-      } =
-        await sb
-          .from('products')
-          .select(`
-            id,
-            name,
-            name_en,
-            shape,
-            drug_type,
-            classification,
-            active_ingredient,
-            concentration,
-            qr_code,
-            expiry_date,
-            default_sale_price,
-            sale_allowed_units,
-            inventory(quantity_smallest_unit),
-            unit_large,
-            unit_large_to_medium,
-            unit_medium,
-            unit_medium_to_small,
-            unit_small
-          `);
+      const PAGE_SIZE_EXPORT = 1000;
+      let products = [];
+      let fromExport = 0;
 
+      while (true) {
 
-      if (error) {
+        const {
+          data: page,
+          error
+        } =
+          await sb
+            .from('products')
+            .select(`
+              id,
+              name,
+              name_en,
+              shape,
+              drug_type,
+              classification,
+              active_ingredient,
+              concentration,
+              qr_code,
+              expiry_date,
+              default_sale_price,
+              sale_allowed_units,
+              inventory(quantity_smallest_unit),
+              unit_large,
+              unit_large_to_medium,
+              unit_medium,
+              unit_medium_to_small,
+              unit_small
+            `)
+            .range(fromExport, fromExport + PAGE_SIZE_EXPORT - 1);
 
-        alert(
-          'تعذّر التصدير: ' +
-          error.message
-        );
+        if (error) {
 
-        return;
+          alert(
+            'تعذّر التصدير: ' +
+            error.message
+          );
+
+          return;
+
+        }
+
+        products = products.concat(page || []);
+
+        if (!page || page.length < PAGE_SIZE_EXPORT) {
+          break;
+        }
+
+        fromExport += PAGE_SIZE_EXPORT;
 
       }
 
@@ -5901,6 +5917,31 @@ document
               : mediumToSmall;
 
 
+          // تفكيك الكمية الكلية (بالوحدة الصغرى) لأرقام صحيحة:
+          // عدد العلب الكاملة + الباقي كوحدات متوسطة + الباقي كوحدات صغيرة
+          let remainingQty = qty;
+
+          const wholeBoxes =
+            totalPerBox > 0
+              ? Math.floor(remainingQty / totalPerBox)
+              : 0;
+
+          remainingQty =
+            totalPerBox > 0
+              ? remainingQty - (wholeBoxes * totalPerBox)
+              : remainingQty;
+
+          const wholeMedium =
+            mediumToSmall > 0
+              ? Math.floor(remainingQty / mediumToSmall)
+              : 0;
+
+          const wholeSmall =
+            mediumToSmall > 0
+              ? remainingQty - (wholeMedium * mediumToSmall)
+              : remainingQty;
+
+
           const row = {
 
             'الاسم العربي':
@@ -5927,12 +5968,9 @@ document
             'التصنيف':
               p.classification || '',
 
-            'عدد العلب':
-              totalPerBox > 0
-                ? (
-                    qty /
-                    totalPerBox
-                  ).toFixed(2)
+            'عدد العلب الكاملة':
+              hasLargeLevel
+                ? wholeBoxes
                 : 0,
 
             'الوحدة المتوسطة':
@@ -5962,6 +6000,14 @@ document
 
             'إجمالي الوحدات الصغيرة/العلبة':
               totalPerBox,
+
+            'باقي (وحدة متوسطة)':
+              hasLargeLevel
+                ? wholeMedium
+                : wholeBoxes,
+
+            'باقي (وحدة صغيرة)':
+              wholeSmall,
 
             'وحدات البيع':
               getSaleUnitsText(p),
@@ -6027,6 +6073,10 @@ document
         { wch: 25 },
 
         { wch: 28 },
+
+        { wch: 18 },
+
+        { wch: 18 },
 
         { wch: 25 },
 
