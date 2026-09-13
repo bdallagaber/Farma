@@ -231,7 +231,7 @@ function ensureXLSX() { return loadScriptOnce('xlsx-lib.js'); }
           لا — علبة وبس الوحدة المتوسطة
         </option>
 
-        <option value="yes">
+        <option value="yes" selected>
           أيوه — علبة ← وسط ← فردي
         </option>
       </select>
@@ -3094,7 +3094,14 @@ function fuzzyIncludes(
   return false;
 
 }
-
+function fuzzyIncludesProduct(product, term) {
+  if (!term) return true;
+  if (!product._farmaSearchText) product._farmaSearchText = normalizeForSearch((product.name || '') + ' ' + (product.name_en || ''));
+  const normTerm = normalizeForSearch(term);
+  if (product._farmaSearchText.includes(normTerm)) return true;
+  const words = term.trim().split(/\s+/).filter(Boolean);
+  return words.length > 1 && words.every(word => product._farmaSearchText.includes(normalizeForSearch(word)));
+}
 
 /* ============================================================
    ترتيب المخزون
@@ -3200,6 +3207,7 @@ async function loadInventory() {
         .from('products')
         .select(
           'id, name, name_en, shape, drug_type, classification, supplier, active_ingredient, concentration, retail_allowed, sale_allowed_units, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit)'
+          + ', created_at'
         )
         .order(
           'created_at',
@@ -3304,12 +3312,7 @@ function renderInventoryTable(
 
       if (
         term &&
-        !fuzzyIncludes(
-          (p.name || '') +
-          ' ' +
-          (p.name_en || ''),
-          term
-        )
+        !fuzzyIncludesProduct(p, term)
       ) {
         return false;
       }
@@ -3414,23 +3417,15 @@ function renderInventoryTable(
       'inventorySort'
     )?.value || 'none';
 
-  if (
-    sortMode !== 'none'
-  ) {
-
-    products =
-      [...products].sort(
-        (a, b) =>
-          compareProductsByName(
-            a,
-            b,
-            sortMode
-          )
-      );
-
+  if (sortMode === 'created_desc') {
+    products = [...products].sort((a, b) => {
+      const timeA = Date.parse(a.created_at || '') || 0;
+      const timeB = Date.parse(b.created_at || '') || 0;
+      return timeB - timeA || String(b.id || '').localeCompare(String(a.id || ''));
+    });
+  } else if (sortMode !== 'none') {
+    products = [...products].sort((a, b) => compareProductsByName(a, b, sortMode));
   }
-
-
   updateFilterOptionCounts(
     term
   );
@@ -4559,7 +4554,7 @@ function resetForm() {
 
   document.getElementById(
     'p_has_strip'
-  ).value = 'no';
+  ).value = 'yes';
 
   document.getElementById(
     'p_other_shape_note'

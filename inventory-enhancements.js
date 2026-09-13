@@ -108,7 +108,7 @@
     const cls = selected('classChk');
     const avail = selected('availChk');
     return source.filter(p => {
-      if (term && typeof window.fuzzyIncludes === 'function' && !window.fuzzyIncludes((p.name || '') + ' ' + (p.name_en || ''), term)) return false;
+      if (term && typeof window.fuzzyIncludesProduct === 'function' && !window.fuzzyIncludesProduct(p, term)) return false;
       if (shape.length && !shape.includes(isBlank(p.shape) ? UNCLASSIFIED : p.shape)) return false;
       if (type.length && !type.includes(isBlank(p.drug_type) ? UNCLASSIFIED : p.drug_type)) return false;
       if (cls.length && !cls.includes(isBlank(p.classification) ? UNCLASSIFIED : p.classification)) return false;
@@ -223,29 +223,7 @@
     select.addEventListener('change', e => { localStorage.setItem('farmaInventorySort', e.target.value); rerender(); });
   }
 
-  function installCreatedAtSort() {
-    if (window.__farmaCreatedAtSortInstalled) return;
-    if (typeof window.renderInventoryTable !== 'function') return;
-    window.__farmaCreatedAtSortInstalled = true;
-    const originalRender = window.renderInventoryTable;
-    window.renderInventoryTable = function(searchText) {
-      const select = document.getElementById('inventorySort');
-      if (!select || select.value !== 'created_desc') return originalRender(searchText);
-      const cache = window._productsCache || [];
-      const sorted = [...cache].sort((a, b) => {
-        const ta = Date.parse(a?.created_at || '') || 0;
-        const tb = Date.parse(b?.created_at || '') || 0;
-        if (tb !== ta) return tb - ta;
-        return String(b?.id || '').localeCompare(String(a?.id || ''));
-      });
-      window._productsCache = sorted;
-      const previous = select.value;
-      select.value = 'none';
-      try { return originalRender(searchText); }
-      finally { select.value = previous; window._productsCache = cache; }
-    };
-  }
-
+  function installCreatedAtSort() { /* sorting is handled by renderInventoryTable */ }
   function addUnclassifiedOptions() {
     appendUnclassified('filterShapeBox', 'shapeChk', 'غير مصنف');
     appendUnclassified('filterTypeBox', 'typeChk', 'غير مصنف');
@@ -286,19 +264,9 @@
   }
 
   async function loadAllProducts() {
-    if (allProductsLoaded || !window.sb) return;
-    const select = 'id, name, name_en, shape, drug_type, classification, supplier, active_ingredient, concentration, retail_allowed, sale_allowed_units, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, expiry_date, min_stock_threshold, other_note, default_sale_price, inventory(quantity_smallest_unit), created_at';
-    const pageSize = 1000;
-    const all = [];
-    for (let from = 0; ; from += pageSize) {
-      const { data, error } = await window.sb.from('products').select(select).order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, from + pageSize - 1);
-      if (error) { console.error('Farma inventory pagination:', error); return; }
-      const page = data || [];
-      all.push(...page);
-      if (page.length < pageSize) break;
-    }
-    if (!all.length) return;
-    window._productsCache = all;
+    if (allProductsLoaded) return;
+    // The main inventory loader already fetched the complete product cache.
+    const all = Array.isArray(window._productsCache) ? window._productsCache : [];
     allProductsLoaded = true;
     refreshExtraFiltersIfNeeded();
     addUnclassifiedOptions();
