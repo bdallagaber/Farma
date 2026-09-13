@@ -30,3 +30,10 @@ button{padding:11px 18px;background:var(--primary);color:#fff;border:none;border
 @media (min-width:701px){.invoice-toolbar{position:relative;justify-content:center}.invoice-search{flex:1}.invoice-toolbar>.filter-tools{position:absolute;left:50%;transform:translateX(-50%);z-index:20;white-space:nowrap}}
 .extra-entry button,.extra-entry button span{color:var(--text)!important;opacity:1!important;visibility:visible!important}.extra-entry button:hover,.extra-entry button:hover span{color:var(--primary-dark)!important}
 #dateMenu .quick-option[data-preset="month"].active{border-color:transparent;background:transparent;color:var(--text)}#dateMenu .quick-option[data-preset="month"].active .check{opacity:0}
+
+/* Shortages table: fit all columns in the viewport without horizontal scrolling. */
+.shortages-table{min-width:0!important;width:100%;table-layout:fixed}
+.shortages-table .col-product{width:38%}.shortages-table .col-available{width:23%}.shortages-table .col-min{width:15%}.shortages-table .col-supply{width:24%}
+.shortages-table th,.shortages-table td{white-space:normal;word-break:break-word;padding:9px 6px}
+.shortages-table .qty-input{width:100%;min-width:0;margin:0;padding:8px 5px;font-size:12px}
+@media (max-width:480px){.shortages-table{font-size:11px}.shortages-table th{font-size:10px}.shortages-table th,.shortages-table td{padding:7px 3px}.shortages-table .qty-input{font-size:11px;padding:7px 3px}}

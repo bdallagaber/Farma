@@ -149,7 +149,7 @@
     });
     rows.sort((a,b) => sort === 'stock' ? Number(a.quantity_smallest_unit)-Number(b.quantity_smallest_unit) : sort === 'recent' ? (Date.parse(lowStockLatestSaleDates[b.product_id] || '') || 0) - (Date.parse(lowStockLatestSaleDates[a.product_id] || '') || 0) : String(a.name || '').localeCompare(String(b.name || ''), 'ar'));
     if (!rows.length) { wrap.innerHTML = '<p class="empty-ok">لا توجد نتائج مطابقة للفلاتر الحالية</p>'; return; }
-    let html = '<table><thead><tr><th>المنتج</th><th>المتاح</th><th>الحد الأدنى</th><th>كمية التوريد (علب)</th></tr></thead><tbody>';
+    let html = '<table class="shortages-table"><colgroup><col class="col-product"><col class="col-available"><col class="col-min"><col class="col-supply"></colgroup><thead><tr><th>المنتج</th><th>المتاح</th><th>الحد الأدنى</th><th>كمية التوريد (علب)</th></tr></thead><tbody>';
     for (const s of rows) {
       const product = lowStockUnitsMap[s.product_id] || {}, zero = s.quantity_smallest_unit <= 0;
       html += '<tr><td>' + escapeHtml(s.name) + '</td><td class="' + (zero ? 'critical' : 'warning') + '">' + escapeHtml(formatDynamicQuantity(product, s.quantity_smallest_unit)) + (zero ? ' (خلص!)' : '') + '</td><td>' + s.min_stock_threshold + '</td><td><input type="number" min="1" step="1" class="qty-input" id="qty_' + s.product_id + '" placeholder="عدد العلب" onkeydown="if(event.key===\'Enter\'){event.preventDefault();confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')}" onblur="confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')"></td></tr>';
