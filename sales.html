@@ -3063,6 +3063,7 @@ document.getElementById(
 
     const {
       subtotal,
+      discount,
       finalTotal
     } =
       recalcTotals();
@@ -3192,6 +3193,12 @@ document.getElementById(
               invoiceNotes ||
               null,
 
+            discount_type: document.getElementById('s_discount_type').value,
+            discount_value: parseFloat(document.getElementById('s_discount_value').value) || 0,
+            subtotal,
+            discount_amount: discount,
+            total: finalTotal,
+
             created_by:
               currentUser.id
 
@@ -3233,6 +3240,9 @@ document.getElementById(
 
               sale_price:
                 adjustedPrice,
+
+              original_sale_price:
+                item.price,
 
               customer_id:
                 customerId,
