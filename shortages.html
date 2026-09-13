@@ -34,7 +34,7 @@
   <h2>⚠️ أصناف وصلت للحد الأدنى</h2>
   <p class="sub">اكتب كمية التوريد بالعلب — المخزون هيتحدّث تلقائيًا والصنف هيختفي من هنا لما يتخطى الحد الأدنى</p>
   <div class="shortages-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0;">
-    <input id="shortagesSupplier" type="text" placeholder="اسم المورد" style="display:none;flex:0 1 190px;min-width:160px;margin:0;">
+    <select id="shortagesSupplier" style="display:none;flex:0 1 190px;min-width:160px;margin:0;"><option value="">اختر المورد</option></select>
     <input id="shortagesSearch" type="search" placeholder="🔍 ابحث باسم المنتج أو الباركود..." style="flex:1;min-width:220px;margin:0;">
     <select id="shortagesRecentFilter" style="width:auto;min-width:145px;margin:0;"><option value="all">كل التواريخ</option><option value="today">نواقص اليوم</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يومًا</option></select>
     <select id="shortagesSort" style="width:auto;min-width:145px;margin:0;"><option value="name">ترتيب بالاسم</option><option value="stock">الأقل كمية أولًا</option><option value="recent">الأحدث أولًا</option></select>
@@ -120,12 +120,28 @@
     (recentSales || []).forEach(sale => { if (!latestSaleDates[sale.product_id]) latestSaleDates[sale.product_id] = sale.created_at; });
     const unitsMap = {};
     (unitsData || []).forEach(u => { unitsMap[u.id] = u; });
+    await loadSupplierOptions();
 
     lowStockRows = data || [];
     lowStockUnitsMap = unitsMap;
     lowStockLatestSaleDates = latestSaleDates;
     window._shortagesUnitsMap = unitsMap;
     renderLowStock();
+  }
+
+
+  async function loadSupplierOptions() {
+    const select = document.getElementById('shortagesSupplier');
+    if (!select || select.dataset.loaded === '1') return;
+    const { data: options } = await sb.from('custom_options').select('value').eq('category', 'supplier').order('value').limit(100);
+    const values = (options || []).map(x => String(x.value || '').trim()).filter(Boolean);
+    if (!values.length) {
+      const { data: products } = await sb.from('products').select('supplier').not('supplier', 'is', null).limit(2000);
+      values.push(...(products || []).map(x => String(x.supplier || '').trim()).filter(Boolean));
+    }
+    const unique = [...new Set(values)].sort((a,b) => a.localeCompare(b, 'ar'));
+    select.innerHTML = '<option value="">اختر المورد</option>' + unique.map(v => '<option value="' + escapeHtml(v) + '">' + escapeHtml(v) + '</option>').join('');
+    select.dataset.loaded = '1';
   }
 
   function scheduleShortagesRender() { clearTimeout(shortagesRenderTimer); shortagesRenderTimer = setTimeout(renderLowStock, 180); }
@@ -186,7 +202,7 @@
     const inputs = Array.from(document.querySelectorAll('#lowStockWrap .qty-input'));
     const supplier = document.getElementById('shortagesSupplier').value.trim();
     const changes = inputs.map(input => ({ product_id: input.id.slice(4), boxes: Number(input.value) })).filter(x => Number.isFinite(x.boxes) && x.boxes > 0);
-    if (!supplier) { alert('اكتب اسم المورد قبل حفظ الطلبية'); document.getElementById('shortagesSupplier').focus(); return; }
+    if (!supplier) { alert('اختر المورد قبل حفظ الطلبية'); document.getElementById('shortagesSupplier').focus(); return; }
     if (!changes.length) { alert('اكتب كمية علبة واحدة على الأقل قبل الحفظ'); return; }
     const saveBtn = document.getElementById('saveShortageOrder');
     saveBtn.disabled = true;
