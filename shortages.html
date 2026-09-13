@@ -21,7 +21,7 @@
   <a href="inventory.html">المخزون</a>
   <a href="sales.html">المبيعات</a>
   <a href="invoices.html">🧾 الفواتير</a><a href="customers.html">👥 العملاء</a>
-  <a href="shortages.html" class="active">النواقص</a>
+  <a href="shortages.html" class="active">النواقص</a><a href="order-history.html">سجل الطلبيات</a>
   <a href="expenses.html">المصروفات</a>
   <a href="profit.html">الأرباح</a>
   <a href="search.html">🔍 بحث الأدوية</a>
@@ -34,6 +34,7 @@
   <h2>⚠️ أصناف وصلت للحد الأدنى</h2>
   <p class="sub">اكتب كمية التوريد بالعلب — المخزون هيتحدّث تلقائيًا والصنف هيختفي من هنا لما يتخطى الحد الأدنى</p>
   <div class="shortages-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0;">
+    <input id="shortagesSupplier" type="text" placeholder="اسم المورد" style="display:none;flex:0 1 190px;min-width:160px;margin:0;">
     <input id="shortagesSearch" type="search" placeholder="🔍 ابحث باسم المنتج أو الباركود..." style="flex:1;min-width:220px;margin:0;">
     <select id="shortagesRecentFilter" style="width:auto;min-width:145px;margin:0;"><option value="all">كل التواريخ</option><option value="today">نواقص اليوم</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يومًا</option></select>
     <select id="shortagesSort" style="width:auto;min-width:145px;margin:0;"><option value="name">ترتيب بالاسم</option><option value="stock">الأقل كمية أولًا</option><option value="recent">الأحدث أولًا</option></select>
@@ -164,6 +165,7 @@
   function startShortageOrder() {
     shortageOrderMode = true;
     document.getElementById('startShortageOrder').style.display = 'none';
+    document.getElementById('shortagesSupplier').style.display = 'block';
     document.getElementById('saveShortageOrder').style.display = 'inline-block';
     document.getElementById('cancelShortageOrder').style.display = 'inline-block';
     renderLowStock();
@@ -174,6 +176,7 @@
   function cancelShortageOrder() {
     shortageOrderMode = false;
     document.getElementById('startShortageOrder').style.display = 'inline-block';
+    document.getElementById('shortagesSupplier').style.display = 'none';
     document.getElementById('saveShortageOrder').style.display = 'none';
     document.getElementById('cancelShortageOrder').style.display = 'none';
     renderLowStock();
@@ -181,26 +184,16 @@
 
   async function saveShortageOrder() {
     const inputs = Array.from(document.querySelectorAll('#lowStockWrap .qty-input'));
-    const changes = inputs.map(input => ({ productId: input.id.slice(4), boxes: Number(input.value) })).filter(x => Number.isFinite(x.boxes) && x.boxes > 0);
+    const supplier = document.getElementById('shortagesSupplier').value.trim();
+    const changes = inputs.map(input => ({ product_id: input.id.slice(4), boxes: Number(input.value) })).filter(x => Number.isFinite(x.boxes) && x.boxes > 0);
+    if (!supplier) { alert('اكتب اسم المورد قبل حفظ الطلبية'); document.getElementById('shortagesSupplier').focus(); return; }
     if (!changes.length) { alert('اكتب كمية علبة واحدة على الأقل قبل الحفظ'); return; }
     const saveBtn = document.getElementById('saveShortageOrder');
     saveBtn.disabled = true;
     saveBtn.textContent = 'جاري حفظ الطلبية...';
     try {
-      for (const change of changes) {
-        const units = (window._shortagesUnitsMap || {})[change.productId] || {};
-        const perBox = (Number(units.unit_large_to_medium) || 1) * (Number(units.unit_medium_to_small) || 1);
-        const { data: invRow, error: readError } = await sb.from('inventory').select('quantity_smallest_unit').eq('product_id', change.productId).single();
-        if (readError) throw readError;
-        const current = Number(invRow.quantity_smallest_unit) || 0;
-        const { error: updateError } = await sb.from('inventory').update({ quantity_smallest_unit: current + (change.boxes * perBox) }).eq('product_id', change.productId);
-        if (updateError) throw updateError;
-      }
-      shortageOrderMode = false;
-      document.getElementById('startShortageOrder').style.display = 'inline-block';
-      document.getElementById('saveShortageOrder').style.display = 'none';
-      document.getElementById('cancelShortageOrder').style.display = 'none';
-      await loadLowStock();
+      const { error } = await sb.rpc('create_purchase_order', { p_supplier_name: supplier, p_items: changes, p_notes: null });
+      if (error) throw error;
     } catch (error) {
       alert('تعذر حفظ الطلبية بالكامل: ' + (error.message || error));
     } finally {
