@@ -32,12 +32,9 @@
 
 <div class="card">
   <h2>⚠️ أصناف وصلت للحد الأدنى</h2>
-  <p class="sub">اختار "تم الطلب" واكتب عدد العلب — المخزون هيتحدّث والصنف هيختفي من هنا تلقائي</p>
+  <p class="sub">اكتب كمية التوريد بالعلب — المخزون هيتحدّث تلقائيًا والصنف هيختفي من هنا لما يتخطى الحد الأدنى</p>
   <div class="shortages-toolbar" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:14px 0;">
     <input id="shortagesSearch" type="search" placeholder="🔍 ابحث باسم المنتج أو الباركود..." style="flex:1;min-width:220px;margin:0;">
-    <select id="shortagesStatusFilter" style="width:auto;min-width:150px;margin:0;">
-      <option value="all">كل حالات الطلب</option><option value="ordered">تم الطلب</option><option value="unavailable">لم يتم الطلب</option><option value="unset">بدون تحديد</option>
-    </select>
     <select id="shortagesRecentFilter" style="width:auto;min-width:145px;margin:0;"><option value="all">كل التواريخ</option><option value="today">نواقص اليوم</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يومًا</option></select>
     <select id="shortagesSort" style="width:auto;min-width:145px;margin:0;"><option value="name">ترتيب بالاسم</option><option value="stock">الأقل كمية أولًا</option><option value="recent">الأحدث أولًا</option></select>
     <button type="button" id="printShortages" style="margin:0;white-space:nowrap;">🖨️ طباعة</button>
@@ -71,8 +68,7 @@
   let currentUserId = null;
   let lowStockRows = [];
   let lowStockUnitsMap = {};
-  let lowStockChecklistMap = {};
-  let lowStockChecklistDates = {};
+  let lowStockLatestSaleDates = {};
   let shortagesRenderTimer = null;
 
   (async () => {
@@ -86,7 +82,6 @@
     await loadLowStock();
     await loadExpiring();
     document.getElementById('shortagesSearch').addEventListener('input', scheduleShortagesRender);
-    document.getElementById('shortagesStatusFilter').addEventListener('change', renderLowStock);
     document.getElementById('shortagesRecentFilter').addEventListener('change', renderLowStock);
     document.getElementById('shortagesSort').addEventListener('change', renderLowStock);
     document.getElementById('printShortages').addEventListener('click', printShortages);
@@ -115,18 +110,15 @@
 
     const ids = data.map(s => s.product_id);
     const { data: unitsData } = await sb.from('products').select('id, supplier, qr_code, unit_large, unit_large_to_medium, unit_medium, unit_medium_to_small, unit_small, other_note').in('id', ids);
+    const { data: recentSales } = await sb.from('sales').select('product_id, created_at').in('product_id', ids).order('created_at', { ascending: false }).limit(5000);
+    const latestSaleDates = {};
+    (recentSales || []).forEach(sale => { if (!latestSaleDates[sale.product_id]) latestSaleDates[sale.product_id] = sale.created_at; });
     const unitsMap = {};
     (unitsData || []).forEach(u => { unitsMap[u.id] = u; });
 
-    const { data: checklist } = await sb.from('order_checklist').select('product_id, status, updated_at');
-    const checklistMap = {};
-    const checklistDates = {};
-    (checklist || []).forEach(c => { checklistMap[c.product_id] = c.status; checklistDates[c.product_id] = c.updated_at; });
-
     lowStockRows = data || [];
     lowStockUnitsMap = unitsMap;
-    lowStockChecklistMap = checklistMap;
-    lowStockChecklistDates = checklistDates;
+    lowStockLatestSaleDates = latestSaleDates;
     window._shortagesUnitsMap = unitsMap;
     renderLowStock();
   }
@@ -146,54 +138,31 @@
   function renderLowStock() {
     const wrap = document.getElementById('lowStockWrap');
     const term = (document.getElementById('shortagesSearch').value || '').trim().toLowerCase();
-    const filter = document.getElementById('shortagesStatusFilter').value;
     const recent = document.getElementById('shortagesRecentFilter').value;
     const sort = document.getElementById('shortagesSort').value;
-    const cutoff = recent === 'all' ? 0 : Date.now() - Number(recent) * 86400000;
-    let rows = lowStockRows.filter(s => { const p = lowStockUnitsMap[s.product_id] || {}; const st = lowStockChecklistMap[s.product_id] || ''; const updated = Date.parse(lowStockChecklistDates[s.product_id] || ''); const text = [s.name, p.supplier, p.qr_code].filter(Boolean).join(' ').toLowerCase(); return (!term || text.includes(term)) && (filter === 'all' || (filter === 'unset' ? !st : st === filter)) && (!cutoff || (updated && updated >= cutoff)); });
-    rows.sort((a,b) => sort === 'stock' ? Number(a.quantity_smallest_unit)-Number(b.quantity_smallest_unit) : sort === 'recent' ? (Date.parse(lowStockChecklistDates[b.product_id] || '') || 0) - (Date.parse(lowStockChecklistDates[a.product_id] || '') || 0) : String(a.name || '').localeCompare(String(b.name || ''), 'ar'));
+    const cutoff = recent === 'all' ? 0 : Date.now() - (recent === 'today' ? 86400000 : Number(recent) * 86400000);
+    let rows = lowStockRows.filter(s => {
+      const product = lowStockUnitsMap[s.product_id] || {};
+      const latest = Date.parse(lowStockLatestSaleDates[s.product_id] || '');
+      const text = [s.name, product.qr_code].filter(Boolean).join(' ').toLowerCase();
+      return (!term || text.includes(term)) && (!cutoff || (latest && latest >= cutoff));
+    });
+    rows.sort((a,b) => sort === 'stock' ? Number(a.quantity_smallest_unit)-Number(b.quantity_smallest_unit) : sort === 'recent' ? (Date.parse(lowStockLatestSaleDates[b.product_id] || '') || 0) - (Date.parse(lowStockLatestSaleDates[a.product_id] || '') || 0) : String(a.name || '').localeCompare(String(b.name || ''), 'ar'));
     if (!rows.length) { wrap.innerHTML = '<p class="empty-ok">لا توجد نتائج مطابقة للفلاتر الحالية</p>'; return; }
-    let html = '<table><thead><tr><th>المنتج</th><th>المتاح</th><th>الحد الأدنى</th><th>حالة الطلب</th><th>الكمية (علب)</th></tr></thead><tbody>';
+    let html = '<table><thead><tr><th>المنتج</th><th>المتاح</th><th>الحد الأدنى</th><th>كمية التوريد (علب)</th></tr></thead><tbody>';
     for (const s of rows) {
-      const p = lowStockUnitsMap[s.product_id] || {}, zero = s.quantity_smallest_unit <= 0, status = lowStockChecklistMap[s.product_id] || '', cls = status === 'ordered' ? 'ordered-sel' : (status === 'unavailable' ? 'unavailable-sel' : '');
-      html += '<tr><td>' + escapeHtml(s.name) + '</td><td class="' + (zero ? 'critical' : 'warning') + '">' + escapeHtml(formatDynamicQuantity(p, s.quantity_smallest_unit)) + (zero ? ' (خلص!)' : '') + '</td><td>' + s.min_stock_threshold + '</td><td><span><strong>' + (status === 'ordered' ? 'تم الطلب' : (status === 'unavailable' ? 'لم يتم الطلب' : 'بدون تحديد')) + '</strong> <select aria-label="حالة الطلب" class="status-select ' + cls + '" onchange="onStatusChange(this, \'' + s.product_id + '\')"><option value=""' + (!status ? ' selected' : '') + '>بدون تحديد</option><option value="ordered"' + (status === 'ordered' ? ' selected' : '') + '>تم الطلب</option><option value="unavailable"' + (status === 'unavailable' ? ' selected' : '') + '>لم يتم الطلب</option></select></span></td><td><input type="number" min="1" class="qty-input" id="qty_' + s.product_id + '" placeholder="عدد العلب" onkeydown="if(event.key===\'Enter\') confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')" onblur="confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')"></td></tr>';
+      const product = lowStockUnitsMap[s.product_id] || {}, zero = s.quantity_smallest_unit <= 0;
+      html += '<tr><td>' + escapeHtml(s.name) + '</td><td class="' + (zero ? 'critical' : 'warning') + '">' + escapeHtml(formatDynamicQuantity(product, s.quantity_smallest_unit)) + (zero ? ' (خلص!)' : '') + '</td><td>' + s.min_stock_threshold + '</td><td><input type="number" min="1" step="1" class="qty-input" id="qty_' + s.product_id + '" placeholder="عدد العلب" onkeydown="if(event.key===\'Enter\'){event.preventDefault();confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')}" onblur="confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')"></td></tr>';
     }
     wrap.innerHTML = html + '</tbody></table>';
   }
 
-  window.onStatusChange = async function(selectEl, productId) {
-    const status = selectEl.value;
-    selectEl.className = 'status-select ' + (status === 'ordered' ? 'ordered-sel' : (status === 'unavailable' ? 'unavailable-sel' : ''));
-
-    if (status === '') {
-      const { error } = await sb.from('order_checklist').delete().eq('product_id', productId);
-      if (error) { alert('تعذر إلغاء حالة الطلب: ' + error.message); return; }
-      lowStockChecklistMap[productId] = '';
-      delete lowStockChecklistDates[productId];
-      renderLowStock();
-      return;
-    }
-    const { error } = await sb.from('order_checklist').upsert({
-      product_id: productId, status, updated_at: new Date().toISOString(), updated_by: currentUserId
-    });
-    if (error) { alert('تعذر حفظ حالة الطلب: ' + error.message); return; }
-    lowStockChecklistMap[productId] = status;
-    lowStockChecklistDates[productId] = new Date().toISOString();
-    renderLowStock();
-
-    if (status === 'ordered') {
-      const qtyInput = document.getElementById('qty_' + productId);
-      qtyInput.focus();
-    }
-  };
-
   window.confirmOrder = async function(productId, currentSmallQty) {
     const qtyInput = document.getElementById('qty_' + productId);
+    if (qtyInput.dataset.saving === '1') return;
     const boxesOrdered = parseFloat(qtyInput.value);
     if (!boxesOrdered || boxesOrdered <= 0) return; // لسه ماكتبش كمية، منعملش حاجة
-
-    const rowSelect = qtyInput.closest('tr').querySelector('.status-select');
-    if (rowSelect.value !== 'ordered') return; // نفّذ بس لو "تم الطلب" مختارة
+    qtyInput.dataset.saving = '1';
 
     const units = (window._shortagesUnitsMap || {})[productId] || {};
     const perBox = (units.unit_large_to_medium || 1) * (units.unit_medium_to_small || 1);
@@ -204,11 +173,11 @@
       .eq('product_id', productId)
       .select();
 
-    if (error) { alert('حصل خطأ: ' + error.message); return; }
-    if (!updatedInv || updatedInv.length === 0) { alert('تعذّر تحديث المخزون، جرّب تسجّل خروج ودخول تاني'); return; }
+    if (error) { qtyInput.dataset.saving = ''; alert('حصل خطأ: ' + error.message); return; }
+    if (!updatedInv || updatedInv.length === 0) { qtyInput.dataset.saving = ''; alert('تعذّر تحديث المخزون، جرّب تسجّل خروج ودخول تاني'); return; }
 
-    // خلصنا، نمسح تحديد الطلب ونحدّث القائمة (الصنف هيختفي تلقائي لو بقى فوق الحد الأدنى)
-    await sb.from('order_checklist').delete().eq('product_id', productId);
+    qtyInput.value = '';
+    qtyInput.dataset.saving = '';
     await loadLowStock();
   };
 
