@@ -194,6 +194,14 @@
     try {
       const { error } = await sb.rpc('create_purchase_order', { p_supplier_name: supplier, p_items: changes, p_notes: null });
       if (error) throw error;
+      // الطلبية أصبحت محفوظة ومعلقة: أغلق وضع الإدخال وأعد تحميل النواقص.
+      shortageOrderMode = false;
+      document.getElementById('startShortageOrder').style.display = 'inline-block';
+      document.getElementById('shortagesSupplier').style.display = 'none';
+      document.getElementById('shortagesSupplier').value = '';
+      document.getElementById('saveShortageOrder').style.display = 'none';
+      document.getElementById('cancelShortageOrder').style.display = 'none';
+      await loadLowStock();
     } catch (error) {
       alert('تعذر حفظ الطلبية بالكامل: ' + (error.message || error));
     } finally {
