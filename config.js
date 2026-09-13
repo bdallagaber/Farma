@@ -35,6 +35,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const wrap=document.getElementById('pagesWrap');
   const container=wrap&&(wrap.querySelector('div[style*="flex-wrap"]')||wrap.lastElementChild);
   if(container&&!container.querySelector('.pageChk[value="invoices"]')){const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:6px;font-size:13px;';label.innerHTML='<input type="checkbox" class="pageChk" value="invoices" style="width:auto;margin:0;"> الفواتير';container.appendChild(label);}
+  if(container&&!container.querySelector('.pageChk[value="order-history"]')){const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:6px;font-size:13px;';label.innerHTML='<input type="checkbox" class="pageChk" value="order-history" style="width:auto;margin:0;"> سجل الطلبيات';container.appendChild(label);}
   if(container&&!container.querySelector('.pageChk[value="customers"]')){const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:6px;font-size:13px;';label.innerHTML='<input type="checkbox" class="pageChk" value="customers" style="width:auto;margin:0;"> العملاء';container.appendChild(label);}
   if(container&&!container.querySelector('.pageChk[value="attendance"]')){const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:6px;font-size:13px;';label.innerHTML='<input type="checkbox" class="pageChk" value="attendance" style="width:auto;margin:0;"> الحضور والانصراف';container.appendChild(label);}
   const observer=new MutationObserver(()=>{
@@ -48,7 +49,7 @@ document.addEventListener('DOMContentLoaded',()=>{
     const user=(window._usersCache||[]).find(x=>x.id===userId);
     const current=(user&&user.allowed_pages)||[];
     const add=(value,labelText)=>{if(modal.querySelector('.permChk[value="'+value+'"]'))return;const label=document.createElement('label');label.style.cssText='display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:14px;';const input=document.createElement('input');input.type='checkbox';input.className='permChk';input.value=value;input.style.cssText='width:auto;margin:0;';input.checked=current.includes(value);label.appendChild(input);label.appendChild(document.createTextNode(' '+labelText));saveButton.parentNode.insertBefore(label,saveButton);};
-    add('invoices','الفواتير');add('attendance','الحضور والانصراف');
+    add('invoices','الفواتير');add('order-history','سجل الطلبيات');add('attendance','الحضور والانصراف');
   });
   observer.observe(document.body,{childList:true,subtree:true});
 });
