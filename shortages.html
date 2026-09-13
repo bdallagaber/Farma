@@ -37,7 +37,7 @@
     <input id="shortagesSearch" type="search" placeholder="🔍 ابحث باسم المنتج أو الباركود..." style="flex:1;min-width:220px;margin:0;">
     <select id="shortagesRecentFilter" style="width:auto;min-width:145px;margin:0;"><option value="all">كل التواريخ</option><option value="today">نواقص اليوم</option><option value="7">آخر 7 أيام</option><option value="30">آخر 30 يومًا</option></select>
     <select id="shortagesSort" style="width:auto;min-width:145px;margin:0;"><option value="name">ترتيب بالاسم</option><option value="stock">الأقل كمية أولًا</option><option value="recent">الأحدث أولًا</option></select>
-    <button type="button" id="printShortages" style="margin:0;white-space:nowrap;">🖨️ طباعة</button>
+    <button type="button" id="startShortageOrder" style="margin:0;white-space:nowrap;">📝 إنشاء/تعديل طلبية</button><button type="button" id="saveShortageOrder" style="margin:0;white-space:nowrap;display:none;">💾 حفظ الطلبية</button><button type="button" id="cancelShortageOrder" class="secondary" style="margin:0;white-space:nowrap;display:none;">إلغاء</button><button type="button" id="printShortages" style="margin:0;white-space:nowrap;">🖨️ طباعة</button>
   </div>
   <div id="lowStockWrap"><p class="loading">جاري التحميل...</p></div>
 </div>
@@ -70,6 +70,7 @@
   let lowStockUnitsMap = {};
   let lowStockLatestSaleDates = {};
   let shortagesRenderTimer = null;
+  let shortageOrderMode = false;
 
   (async () => {
     const auth = await requireAuth();
@@ -84,6 +85,9 @@
     document.getElementById('shortagesSearch').addEventListener('input', scheduleShortagesRender);
     document.getElementById('shortagesRecentFilter').addEventListener('change', renderLowStock);
     document.getElementById('shortagesSort').addEventListener('change', renderLowStock);
+    document.getElementById('startShortageOrder').addEventListener('click', startShortageOrder);
+    document.getElementById('saveShortageOrder').addEventListener('click', saveShortageOrder);
+    document.getElementById('cancelShortageOrder').addEventListener('click', cancelShortageOrder);
     document.getElementById('printShortages').addEventListener('click', printShortages);
   })();
 
@@ -152,34 +156,58 @@
     let html = '<table class="shortages-table"><colgroup><col class="col-product"><col class="col-available"><col class="col-min"><col class="col-supply"></colgroup><thead><tr><th>المنتج</th><th>المتاح</th><th>الحد الأدنى</th><th>كمية التوريد (علب)</th></tr></thead><tbody>';
     for (const s of rows) {
       const product = lowStockUnitsMap[s.product_id] || {}, zero = s.quantity_smallest_unit <= 0;
-      html += '<tr><td>' + escapeHtml(s.name) + '</td><td class="' + (zero ? 'critical' : 'warning') + '">' + escapeHtml(formatDynamicQuantity(product, s.quantity_smallest_unit)) + (zero ? ' (خلص!)' : '') + '</td><td>' + s.min_stock_threshold + '</td><td><input type="number" min="1" step="1" class="qty-input" id="qty_' + s.product_id + '" placeholder="عدد العلب" onkeydown="if(event.key===\'Enter\'){event.preventDefault();confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')}" onblur="confirmOrder(\'' + s.product_id + '\', ' + s.quantity_smallest_unit + ')"></td></tr>';
+      html += '<tr><td>' + escapeHtml(s.name) + '</td><td class="' + (zero ? 'critical' : 'warning') + '">' + escapeHtml(formatDynamicQuantity(product, s.quantity_smallest_unit)) + (zero ? ' (خلص!)' : '') + '</td><td>' + s.min_stock_threshold + '</td><td><input type="number" min="1" step="1" class="qty-input" id="qty_' + s.product_id + '" placeholder="عدد العلب" ' + (shortageOrderMode ? '' : 'disabled') + '></td></tr>';
     }
     wrap.innerHTML = html + '</tbody></table>';
   }
 
-  window.confirmOrder = async function(productId, currentSmallQty) {
-    const qtyInput = document.getElementById('qty_' + productId);
-    if (qtyInput.dataset.saving === '1') return;
-    const boxesOrdered = parseFloat(qtyInput.value);
-    if (!boxesOrdered || boxesOrdered <= 0) return; // لسه ماكتبش كمية، منعملش حاجة
-    qtyInput.dataset.saving = '1';
+  function startShortageOrder() {
+    shortageOrderMode = true;
+    document.getElementById('startShortageOrder').style.display = 'none';
+    document.getElementById('saveShortageOrder').style.display = 'inline-block';
+    document.getElementById('cancelShortageOrder').style.display = 'inline-block';
+    renderLowStock();
+    const first = document.querySelector('#lowStockWrap .qty-input');
+    if (first) first.focus();
+  }
 
-    const units = (window._shortagesUnitsMap || {})[productId] || {};
-    const perBox = (units.unit_large_to_medium || 1) * (units.unit_medium_to_small || 1);
-    const addedSmallQty = boxesOrdered * perBox;
+  function cancelShortageOrder() {
+    shortageOrderMode = false;
+    document.getElementById('startShortageOrder').style.display = 'inline-block';
+    document.getElementById('saveShortageOrder').style.display = 'none';
+    document.getElementById('cancelShortageOrder').style.display = 'none';
+    renderLowStock();
+  }
 
-    const { data: updatedInv, error } = await sb.from('inventory')
-      .update({ quantity_smallest_unit: currentSmallQty + addedSmallQty })
-      .eq('product_id', productId)
-      .select();
-
-    if (error) { qtyInput.dataset.saving = ''; alert('حصل خطأ: ' + error.message); return; }
-    if (!updatedInv || updatedInv.length === 0) { qtyInput.dataset.saving = ''; alert('تعذّر تحديث المخزون، جرّب تسجّل خروج ودخول تاني'); return; }
-
-    qtyInput.value = '';
-    qtyInput.dataset.saving = '';
-    await loadLowStock();
-  };
+  async function saveShortageOrder() {
+    const inputs = Array.from(document.querySelectorAll('#lowStockWrap .qty-input'));
+    const changes = inputs.map(input => ({ productId: input.id.slice(4), boxes: Number(input.value) })).filter(x => Number.isFinite(x.boxes) && x.boxes > 0);
+    if (!changes.length) { alert('اكتب كمية علبة واحدة على الأقل قبل الحفظ'); return; }
+    const saveBtn = document.getElementById('saveShortageOrder');
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'جاري حفظ الطلبية...';
+    try {
+      for (const change of changes) {
+        const units = (window._shortagesUnitsMap || {})[change.productId] || {};
+        const perBox = (Number(units.unit_large_to_medium) || 1) * (Number(units.unit_medium_to_small) || 1);
+        const { data: invRow, error: readError } = await sb.from('inventory').select('quantity_smallest_unit').eq('product_id', change.productId).single();
+        if (readError) throw readError;
+        const current = Number(invRow.quantity_smallest_unit) || 0;
+        const { error: updateError } = await sb.from('inventory').update({ quantity_smallest_unit: current + (change.boxes * perBox) }).eq('product_id', change.productId);
+        if (updateError) throw updateError;
+      }
+      shortageOrderMode = false;
+      document.getElementById('startShortageOrder').style.display = 'inline-block';
+      document.getElementById('saveShortageOrder').style.display = 'none';
+      document.getElementById('cancelShortageOrder').style.display = 'none';
+      await loadLowStock();
+    } catch (error) {
+      alert('تعذر حفظ الطلبية بالكامل: ' + (error.message || error));
+    } finally {
+      saveBtn.disabled = false;
+      saveBtn.textContent = '💾 حفظ الطلبية';
+    }
+  }
 
   async function loadExpiring() {
     const wrap = document.getElementById('expiryWrap');
