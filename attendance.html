@@ -97,7 +97,7 @@ $('notifList').addEventListener('click',e=>{if(!isAdmin)return;const item=e.targ
 async function loadToday(){const d=today();const y=addDays(d,-1);
   // فيه شيفتات عابرة لنص الليل، فسجل الحضور المفتوح ممكن يكون تاريخه إمبارح لسه.
   // ندور على أحدث سجل خلال اليومين (النهاردة أو إمبارح) بنفس منطق الـ RPC بتاع الانصراف.
-  const {data:rows,error}=await sb.from('attendance').select('*').eq('employee_id',auth.user.id).in('work_date',[y,d]).order('work_date',{ascending:false});
+  const {data:rows,error}=await sb.from('attendance').select('*,reviewer:profiles!attendance_requests_reviewed_by_fkey(full_name),creator:profiles!attendance_requests_created_by_fkey(full_name)').eq('employee_id',auth.user.id).in('work_date',[y,d]).order('work_date',{ascending:false});
   if(error){$('locationMsg').textContent='تعذر تحميل حضور اليوم: '+error.message;return}
   const todayRow=(rows||[]).find(r=>r.work_date===d)||null;
   const openRow=(rows||[]).find(r=>r.check_in&&!r.check_out)||null;
@@ -136,7 +136,7 @@ async function loadMyRequests(){
   if(error){$('myRequests').innerHTML='<p class="error">'+esc(error.message)+'</p>';return}
   myRequestsData=data||[];
   if(!myRequestsData.length){$('myRequests').innerHTML='<div class="empty">لا توجد طلبات حتى الآن.</div>';updateNotifBadge();return}
-  $('myRequests').innerHTML=myRequestsData.map(r=>'<details class="request-box"><summary><span><strong>'+esc(requestTypeText(r.request_type))+'</strong> — '+dateText(r.start_date)+(r.end_date&&r.end_date!==r.start_date?' → '+dateText(r.end_date):'')+'</span><span class="status '+esc(r.status)+'">'+esc({pending:'قيد المراجعة',approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span></summary><div class="mini">'+(r.requested_time?'⏰ '+esc(String(r.requested_time).slice(0,5)):'')+'<div class="mini">أنشأه: '+esc(r.creator?.full_name||r.employee?.full_name||'—')+(r.reviewed_at?' · القرار بواسطة: '+esc(r.reviewer?.full_name||'—')+' في '+dateTimeText(r.reviewed_at):'')+'</div><p>'+esc(r.reason)+'</p>'+(r.admin_note?'<div class="map-note">ملاحظة الأدمن: '+esc(r.admin_note)+'</div>':'')+'</details>').join('');
+  $('myRequests').innerHTML=myRequestsData.map(r=>'<details class="request-box"><summary><span><strong>'+esc(requestTypeText(r.request_type))+'</strong> — '+dateText(r.start_date)+(r.end_date&&r.end_date!==r.start_date?' → '+dateText(r.end_date):'')+'</span><span class="status '+esc(r.status)+'">'+esc({pending:'قيد المراجعة',approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span></summary><div class="mini">'+(r.requested_time?'⏰ '+esc(String(r.requested_time).slice(0,5)):'')+' · تاريخ التقديم: '+dateTimeText(r.created_at)+(r.reviewed_at?' · تاريخ القرار: '+dateTimeText(r.reviewed_at)+' بواسطة '+esc(r.reviewer?.full_name||'—'):'')+'</div>'+(r.request_other?'<div class="map-note">نوع الطلب: '+esc(r.request_other)+'</div>':'')+'<p>'+esc(r.reason)+'</p>'+(r.admin_note?'<div class="map-note">ملاحظة الأدمن: '+esc(r.admin_note)+'</div>':'')+'</details>').join('');
   updateNotifBadge();
 }
 
