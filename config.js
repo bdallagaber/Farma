@@ -64,3 +64,5 @@ document.addEventListener('DOMContentLoaded',async()=>{
   panel.classList.remove('hidden');
   if(typeof loadToday==='function')await loadToday();
 });
+
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(async()=>{try{const a=await requireAuth();if(!a)return;const link=document.querySelector('nav a[href="attendance.html"]');if(!link)return;const q=a.profile.role==='admin'?sb.from('attendance_requests').select('id').eq('status','pending').limit(100):sb.from('attendance_requests').select('id').eq('employee_id',a.user.id).neq('status','pending').limit(100);const {data}=await q;if(!data?.length)return;const badge=document.createElement('span');badge.textContent=data.length>99?'99+':String(data.length);badge.style.cssText='display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;margin-right:6px;padding:0 5px;border-radius:999px;background:#dc2626;color:#fff;font-size:10px;font-weight:800;';link.appendChild(badge);}catch(e){console.warn('Attendance badge unavailable',e)}},0)});
