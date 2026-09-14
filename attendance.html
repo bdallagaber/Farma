@@ -32,7 +32,7 @@ details.card{padding:0;overflow:hidden}details.card>summary{cursor:pointer;list-
 
 <details class="card collapsible" data-key="shifts"><summary><h2>🕐 الشيفتات</h2></summary><div class="three"><div><label>اسم الشيفت</label><input id="shiftName" placeholder="مثال: صباحي"></div><div><label>من</label><input id="shiftStart" type="time"></div><div><label>إلى</label><input id="shiftEnd" type="time"></div><div><label>السماح بالتأخير (دقيقة)</label><input id="shiftGrace" type="number" min="0" value="10"></div><div><label>حد الـ Overtime (دقيقة)</label><input id="shiftOtGrace" type="number" min="0" value="0"></div></div><input type="hidden" id="shiftEditId" value=""><button id="addShift">إضافة الشيفت</button> <button id="cancelShiftEdit" style="display:none">إلغاء التعديل</button><div id="shiftsTable" class="scroll"></div></details>
 
-<details class="card collapsible" data-key="schedule"><summary><h2>📅 جدول الموظفين الأسبوعي</h2></summary><div class="two"><div><label>الموظف</label><select id="scheduleEmployee"></select></div><div><label>الشيفت</label><select id="scheduleShift"></select></div></div><div class="two"><div><label>من تاريخ</label><input id="scheduleFrom" type="date"></div><div><label>إلى تاريخ (اختياري)</label><input id="scheduleTo" type="date"></div></div><input type="hidden" id="scheduleEditId" value=""><button id="addSchedule">تعيين الشيفت</button> <button id="cancelScheduleEdit" style="display:none">إلغاء التعديل</button><div id="scheduleTable" class="scroll"></div></details>
+<details class="card collapsible" data-key="schedule"><summary><h2>📅 جدول الموظفين الأسبوعي</h2></summary><div class="two"><div><label>الموظف</label><select id="scheduleEmployee"></select></div><div><label>الشيفت</label><select id="scheduleShift"></select></div><div><label>يوم الأسبوع (اختياري)</label><select id="scheduleWeekday"><option value="">كل الأيام</option><option value="0">الأحد</option><option value="1">الإثنين</option><option value="2">الثلاثاء</option><option value="3">الأربعاء</option><option value="4">الخميس</option><option value="5">الجمعة</option><option value="6">السبت</option></select></div></div><div class="two"><div><label>من تاريخ</label><input id="scheduleFrom" type="date"></div><div><label>إلى تاريخ (اختياري)</label><input id="scheduleTo" type="date"></div></div><input type="hidden" id="scheduleEditId" value=""><button id="addSchedule">تعيين الشيفت</button> <button id="cancelScheduleEdit" style="display:none">إلغاء التعديل</button><div id="scheduleTable" class="scroll"></div></details>
 
 <details class="card collapsible" data-key="requests"><summary><h2>📥 طلبات الموظفين</h2></summary><div class="three"><div><label>الحالة</label><select id="reqFilterStatus"><option value="">الكل</option><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select></div><div><label>الموظف</label><select id="reqFilterEmployee"><option value="">الكل</option></select></div><div><label>بحث بالسبب</label><input id="reqFilterSearch" placeholder="بحث..."></div></div><div id="adminRequests"><p class="loading">جاري التحميل...</p></div></details>
 
@@ -236,7 +236,7 @@ $('cancelShiftEdit').onclick=resetShiftForm;
 /* ---------- جدول الموظفين الأسبوعي (تعديل + حذف) ---------- */
 $('addSchedule').onclick=async()=>{
   const btn=$('addSchedule');
-  const employee_id=$('scheduleEmployee').value,shift_id=$('scheduleShift').value,weekday=null,effective_from=$('scheduleFrom').value,effective_to=$('scheduleTo').value;
+  const employee_id=$('scheduleEmployee').value,shift_id=$('scheduleShift').value,weekday=$('scheduleWeekday').value===''?null:Number($('scheduleWeekday').value),effective_from=$('scheduleFrom').value,effective_to=$('scheduleTo').value;
   const editId=$('scheduleEditId').value;
   if(!employee_id||!shift_id||!effective_from||!effective_to)return alert('حدد الموظف والشيفت ومن تاريخ وإلى تاريخ');
   if(effective_to<effective_from)return alert('تاريخ النهاية لا يمكن أن يسبق البداية');
@@ -253,7 +253,7 @@ $('addSchedule').onclick=async()=>{
     await loadSchedules();
   }finally{btn.disabled=false}
 };
-function resetScheduleForm(){$('scheduleEditId').value='';$('scheduleFrom').value='';$('scheduleTo').value='';$('addSchedule').textContent='تعيين الشيفت';$('cancelScheduleEdit').style.display='none'}
+function resetScheduleForm(){$('scheduleEditId').value='';$('scheduleWeekday').value='';$('scheduleFrom').value='';$('scheduleTo').value='';$('addSchedule').textContent='تعيين الشيفت';$('cancelScheduleEdit').style.display='none'}
 $('cancelScheduleEdit').onclick=resetScheduleForm;
 async function loadSchedules(){
   const {data,error}=await sb.from('employee_shift_schedule').select('id,employee_id,shift_id,weekday,effective_from,effective_to,profiles!employee_shift_schedule_employee_id_fkey(full_name),attendance_shifts!employee_shift_schedule_shift_id_fkey(name,start_time,end_time)').order('effective_from',{ascending:false});
@@ -267,7 +267,7 @@ $('scheduleTable').addEventListener('click',e=>{
   if(eb){const s=schedules.find(x=>String(x.id)===eb.dataset.id);if(s)startEditSchedule(s)}
   if(db)deleteSchedule(db.dataset.id);
 });
-function startEditSchedule(s){$('scheduleEditId').value=s.id;$('scheduleEmployee').value=s.employee_id;$('scheduleShift').value=s.shift_id;$('scheduleFrom').value=s.effective_from;$('scheduleTo').value=s.effective_to;$('addSchedule').textContent='حفظ التعديل';$('cancelScheduleEdit').style.display='inline-block'}
+function startEditSchedule(s){$('scheduleEditId').value=s.id;$('scheduleEmployee').value=s.employee_id;$('scheduleShift').value=s.shift_id;$('scheduleWeekday').value=s.weekday==null?'':String(s.weekday);$('scheduleFrom').value=s.effective_from;$('scheduleTo').value=s.effective_to;$('addSchedule').textContent='حفظ التعديل';$('cancelScheduleEdit').style.display='inline-block'}
 async function deleteSchedule(id){if(!confirm('تأكيد حذف هذا التعيين؟'))return;const {error}=await sb.from('employee_shift_schedule').delete().eq('id',id);if(error)return alert('تعذر الحذف: '+error.message);await loadSchedules()}
 
 /* ---------- طلبات الموظفين (فلاتر + قائمة مندلسة + تعديل/حذف) ---------- */
