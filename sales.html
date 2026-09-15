@@ -408,7 +408,7 @@
     </div>
 
     <div id="customer_wrap">
-      <label>العميل (اختياري للكاش، إجباري للآجل)</label>
+      <label>العميل (اختياري للكاش، إجباري للآجل أو الدفع الجزئي)</label>
 
       <select id="s_customer">
         <option value="">-- اختار عميل --</option>
@@ -434,6 +434,15 @@
 
     </div>
 
+    <div id="paymentModeWrap" class="hidden">
+      <label>حالة الدفع</label>
+      <select id="s_payment_status"><option value="paid">مدفوع بالكامل</option><option value="partial">مدفوع جزئيًا</option><option value="unpaid">آجل بالكامل</option></select>
+    </div>
+    <div id="paidAmountWrap" class="hidden">
+      <label>المبلغ المدفوع</label>
+      <input id="s_paid_amount" type="number" min="0" step="0.01" value="0" placeholder="اكتب المبلغ المدفوع">
+      <small id="remainingPreview" class="muted"></small>
+    </div>
     <div class="full-width">
       <label>ملاحظات على الفاتورة (اختياري)</label>
       <textarea
@@ -1419,6 +1428,8 @@ function recalcPrice() {
    نوع البيع
    ========================================================= */
 
+function updatePaymentFields(){const type=document.getElementById('s_sale_type').value;const mode=document.getElementById('paymentModeWrap');const paid=document.getElementById('paidAmountWrap');const status=document.getElementById('s_payment_status');mode.classList.toggle('hidden',type==='cash');paid.classList.toggle('hidden',type==='cash'||status.value!=='partial');if(type==='cash'){document.getElementById('s_paid_amount').value='0'}else if(status.value==='paid'){document.getElementById('s_paid_amount').value='0'}const total=recalcTotals().finalTotal;document.getElementById('remainingPreview').textContent='المتبقي: '+Math.max(0,total-(parseFloat(document.getElementById('s_paid_amount').value)||0)).toFixed(2)+' ج.م'}
+document.getElementById('s_sale_type').addEventListener('change',updatePaymentFields);document.getElementById('s_payment_status').addEventListener('change',updatePaymentFields);document.getElementById('s_paid_amount').addEventListener('input',updatePaymentFields);
 document.getElementById(
   's_sale_type'
 ).addEventListener(
@@ -3081,6 +3092,11 @@ document.getElementById(
 
 
     try {
+      const paymentStatus = saleType === 'cash' ? 'paid' : (document.getElementById('s_payment_status').value || 'unpaid');
+      const paidInput = parseFloat(document.getElementById('s_paid_amount').value) || 0;
+      const paidAmount = saleType === 'cash' ? finalTotal : (paymentStatus === 'paid' ? finalTotal : (paymentStatus === 'unpaid' ? 0 : paidInput));
+      if (paidAmount < 0 || paidAmount > finalTotal) throw new Error('المبلغ المدفوع يجب أن يكون بين صفر وإجمالي الفاتورة');
+      const remainingAmount = Math.max(0, finalTotal - paidAmount);
 
       let customerId =
         null;
@@ -3163,6 +3179,8 @@ document.getElementById(
       }
 
 
+      if ((saleType === 'credit' || paidAmount < finalTotal) && !customerId) throw new Error('العميل مطلوب للبيع الآجل أو الدفع الجزئي');
+
       const groupId =
         crypto.randomUUID();
 
@@ -3198,6 +3216,10 @@ document.getElementById(
             subtotal,
             discount_amount: discount,
             total: finalTotal,
+            paid_amount: paidAmount,
+            remaining_amount: remainingAmount,
+            payment_status: remainingAmount === 0 ? 'paid' : (paidAmount > 0 ? 'partial' : 'unpaid'),
+            payment_updated_at: new Date().toISOString(),
 
             created_by:
               currentUser.id
@@ -3323,35 +3345,14 @@ document.getElementById(
       }
 
 
-      /*
-       * دفتر العميل — بس للبيع الآجل
-       */
-      if (
-        customerId &&
-        saleType ===
-        'credit'
-      ) {
-
-        await sb
-          .from('customer_ledger')
-          .insert({
-
-            customer_id:
-              customerId,
-
-            amount:
-              finalTotal,
-
-            note:
-              'بيع آجل (' +
-              cart.length +
-              ' صنف)',
-
-            created_by:
-              currentUser.id
-
-          });
-
+      /* دفتر العميل: نسجل البيع والدفعة كحركتين مرتبطتين بالفاتورة */
+      if (customerId && remainingAmount > 0) {
+        const {error: debtError} = await sb.from('customer_ledger').insert({customer_id: customerId, sale_group_id: groupId, amount: remainingAmount, entry_type: 'sale', note: 'متبقي فاتورة (' + cart.length + ' صنف)', created_by: currentUser.id});
+        if (debtError) throw debtError;
+      }
+      if (customerId && paidAmount > 0 && saleType !== 'cash') {
+        const {error: paymentError} = await sb.from('customer_ledger').insert({customer_id: customerId, sale_group_id: groupId, amount: -paidAmount, entry_type: 'payment', note: 'دفعة مقدمة على الفاتورة', created_by: currentUser.id});
+        if (paymentError) throw paymentError;
       }
 
 
