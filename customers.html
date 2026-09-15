@@ -23,7 +23,7 @@
 <header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px">خروج</button></div></header>
 <nav><a href="inventory.html">المخزون</a><a href="sales.html">المبيعات</a><a href="invoices.html">🧾 الفواتير</a><a href="customers.html" class="active">👥 العملاء</a><a href="shortages.html">النواقص</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a></nav><div id="sidebarOverlay" class="sidebar-overlay"></div>
 <div class="main-content"><div class="card"><h2>👥 العملاء</h2>
-<div class="cust-toolbar"><div class="cust-search"><input id="searchBox" type="text" placeholder="ابحث بالاسم أو التليفون..."></div><button type="button" id="addCustomerBtn">+ عميل جديد</button></div>
+<div class="cust-toolbar"><div class="cust-search"><input id="searchBox" type="text" placeholder="ابحث بالاسم أو التليفون أو واتساب..."></div><select id="customerFilter"><option value="all">كل العملاء</option><option value="debt">عليهم مديونية</option><option value="vip">VIP</option><option value="overdue">متابعة متأخرة</option></select><button type="button" id="addCustomerBtn">+ عميل جديد</button></div>
 <div class="summary-grid"><div class="summary-card"><div class="summary-label">عدد العملاء</div><div class="summary-value" id="custCount">0</div></div><div class="summary-card"><div class="summary-label">إجمالي المديونية</div><div class="summary-value money" id="totalDebt">0.00 ج.م</div></div></div>
 <div id="customersWrap"><p class="loading">جاري التحميل...</p></div>
 </div></div>
@@ -59,7 +59,7 @@ function balanceFor(id){const c=customersCache.find(x=>x.id===id);return c?c.bal
 function renderCustomers(){
   const wrap=document.getElementById('customersWrap');
   const term=document.getElementById('searchBox').value.trim().toLowerCase();
-  const filtered=customersCache.filter(c=>!term||((c.name||'')+' '+(c.phone||'')).toLowerCase().includes(term));
+  const filter=document.getElementById('customerFilter').value;const filtered=customersCache.filter(c=>{const hay=((c.name||'')+' '+(c.phone||'')+' '+(c.whatsapp||'')).toLowerCase();if(term&&!hay.includes(term))return false;if(filter==='debt'&&c.balance<=0)return false;if(filter==='vip'&&c.category!=='vip')return false;if(filter==='overdue'&&!followupsCache.some(f=>f.customer_id===c.id&&f.status==='open'&&f.next_followup_date<todayStr()))return false;return true});
   document.getElementById('custCount').textContent=customersCache.length.toLocaleString('ar-EG');
   const totalDebt=customersCache.reduce((s,c)=>s+Math.max(c.balance,0),0);
   document.getElementById('totalDebt').textContent=totalDebt.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م';
@@ -76,7 +76,7 @@ function renderCustomers(){
   wrap.innerHTML=h;
   wrap.querySelectorAll('.cust-row').forEach(r=>r.addEventListener('click',()=>openCustomer(r.dataset.id)));
 }
-document.getElementById('searchBox').addEventListener('input',renderCustomers);
+document.getElementById('searchBox').addEventListener('input',renderCustomers);document.getElementById('customerFilter').addEventListener('change',renderCustomers);
 
 function openCustomer(id){
   const c=customersCache.find(x=>x.id===id);
@@ -96,18 +96,18 @@ function renderCustomerModal(c,activeTab){
       '<button type="button" class="tab-btn" data-tab="info">البيانات</button>'+
       '<button type="button" class="tab-btn" data-tab="ledger">الرصيد</button>'+
       '<button type="button" class="tab-btn" data-tab="history">المشتريات</button>'+
-      '<button type="button" class="tab-btn" data-tab="followups">المتابعات</button>'+
+      '<button type="button" class="tab-btn" data-tab="followups">المتابعات</button>'+ '<button type="button" class="tab-btn" data-tab="timeline">النشاط</button>'+
     '</div>'+
     '<div class="tab-pane" id="paneInfo"></div>'+
     '<div class="tab-pane" id="paneLedger"></div>'+
     '<div class="tab-pane" id="paneHistory"></div>'+
-    '<div class="tab-pane" id="paneFollowups"></div>';
+    '<div class="tab-pane" id="paneFollowups"></div><div class="tab-pane" id="paneTimeline"></div>';
   document.getElementById('custClose').onclick=closeCustomer;
   p.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(c,b.dataset.tab)));
   renderInfoTab(c);
   renderLedgerTab(c);
   renderHistoryTab(c);
-  renderFollowupsTab(c);
+  renderFollowupsTab(c);renderTimelineTab(c);
   switchTab(c,activeTab||'info');
 }
 function switchTab(c,tab){
@@ -115,13 +115,13 @@ function switchTab(c,tab){
   document.getElementById('paneInfo').classList.toggle('active',tab==='info');
   document.getElementById('paneLedger').classList.toggle('active',tab==='ledger');
   document.getElementById('paneHistory').classList.toggle('active',tab==='history');
-  document.getElementById('paneFollowups').classList.toggle('active',tab==='followups');
+  document.getElementById('paneFollowups').classList.toggle('active',tab==='followups');document.getElementById('paneTimeline').classList.toggle('active',tab==='timeline');
 }
 
 function renderInfoTab(c){
   const pane=document.getElementById('paneInfo');
   pane.innerHTML=
-    '<label>الاسم</label><input id="editName" type="text" value="'+esc(c.name)+'">'+
+    '<div class="summary-grid"><div class="summary-card"><div class="summary-label">الرصيد المستحق</div><div class="summary-value money">'+Number(c.balance||0).toFixed(2)+' ج.م</div></div><div class="summary-card"><div class="summary-label">عدد المشتريات</div><div class="summary-value">'+salesCache.filter(x=>x.customer_id===c.id).length+'</div></div></div>'+'<label>الاسم</label><input id="editName" type="text" value="'+esc(c.name)+'">'+
     '<label>التليفون</label><input id="editPhone" type="text" value="'+esc(c.phone||'')+'">'+
     '<label>واتساب</label><input id="editWhatsapp" type="text" value="'+esc(c.whatsapp||'')+'">'+
     '<label>المنطقة</label><input id="editArea" type="text" value="'+esc(c.area||'')+'">'+
@@ -279,6 +279,7 @@ async function deleteFollowup(c,id){
   if(updated)renderCustomerModal(updated,'followups');
 }
 
+function renderTimelineTab(c){const pane=document.getElementById('paneTimeline');const events=[];salesCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:'شراء '+(x.products?.name||'منتج'),detail:'كمية '+x.quantity+' — '+Number(x.sale_price||0).toFixed(2)+' ج.م'}));ledgerCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:Number(x.amount||0)<0?'تسجيل دفعة':'تسجيل مديونية',detail:x.note||''}));followupsCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:'متابعة: '+(FOLLOWUP_LABELS[x.followup_type]||x.followup_type),detail:x.outcome||x.note||'—'}));events.sort((a,b)=>new Date(b.date)-new Date(a.date));pane.innerHTML=events.length?events.slice(0,100).map(e=>'<div class="followup-row"><div class="followup-top"><strong>'+esc(e.title)+'</strong><span class="followup-meta">'+dFormat(e.date)+'</span></div><div class="followup-meta">'+esc(e.detail)+'</div></div>').join(''):'<p class="loading">لا يوجد نشاط مسجل بعد</p>'}
 document.getElementById('addCustomerBtn').addEventListener('click',()=>{
   const blank={id:null,name:'عميل جديد',phone:'',credit_limit:null,balance:0};
   document.getElementById('customerModal').classList.remove('hidden');
