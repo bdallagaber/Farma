@@ -3132,7 +3132,10 @@ document.getElementById(
           );
 
         }
-
+        const duplicateQuery=sb.from('customers').select('id,name,phone').ilike('name',newName).limit(5);
+        const {data:possibleDuplicates}=newPhone?await sb.from('customers').select('id,name,phone').or('phone.eq.'+newPhone+',name.ilike.'+newName).limit(5):await duplicateQuery;
+        if((possibleDuplicates||[]).length){const match=possibleDuplicates[0];if(confirm('يوجد عميل محتمل بنفس الاسم أو الهاتف: '+match.name+'\nهل تريد استخدام العميل الموجود بدل إنشاء عميل جديد؟')){customerId=match.id;} }
+        if(customerId) { /* existing customer selected after duplicate review */ } else {
 
         const {
           data: newCust,
@@ -3159,6 +3162,7 @@ document.getElementById(
 
         customerId =
           newCust.id;
+        }
 
       } else if (
         custSel
