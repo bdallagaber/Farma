@@ -52,7 +52,7 @@ function minsText(m){m=Number(m||0);return Math.floor(m/60)+'س '+(m%60)+'د'}
 function today(){return new Intl.DateTimeFormat('en-CA',{timeZone:'Africa/Cairo'}).format(new Date())}
 function dateText(v){return v?new Date(v+'T12:00:00').toLocaleDateString('ar-EG',{year:'numeric',month:'2-digit',day:'2-digit'}):'—'}
 function dateTimeText(v){return v?new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}
-function statusText(s){return {present:'حاضر',late:'متأخر',absent:'غائب',leave:'إجازة',off:'راحة',holiday:'عطلة',not_started:'لم يبدأ الشيفت'}[s]||s||'—'}
+function statusText(s){return {present:'حاضر',late:'متأخر',absent:'غائب',leave:'إجازة',off:'راحة',holiday:'عطلة',not_started:'لم يبدأ الشيفت',incomplete:'سجل غير مكتمل'}[s]||s||'—'}
 function cairoOffset(dateStr){const probe=new Date(dateStr+'T12:00:00Z');const parts=new Intl.DateTimeFormat('en-US',{timeZone:'Africa/Cairo',timeZoneName:'longOffset'}).formatToParts(probe);const tz=parts.find(p=>p.type==='timeZoneName')?.value||'GMT+03:00';return tz.replace('GMT','')||'+03:00'}
 function addDays(dateStr,days){const [y,m,d]=dateStr.split('-').map(Number);const dt=new Date(Date.UTC(y,m-1,d));dt.setUTCDate(dt.getUTCDate()+days);return dt.toISOString().slice(0,10)}
 function requestTypeText(t){return {leave:'إجازة',late_permission:'إذن تأخير',early_leave:'إذن انصراف مبكر',other:'طلب آخر'}[t]||t}
@@ -384,9 +384,9 @@ async function loadReport(){
     const {data,error}=await sb.rpc('get_attendance_report',{p_from:from,p_to:to});
     if(error){$('reportTable').innerHTML='<p class="error">تعذر تحميل التقرير: '+esc(error.message)+'</p>';return}
     const rows=data||[];lastReportRows=rows;
-    const counts={present:0,late:0,absent:0,leave:0,off:0,not_started:0};
+const counts={present:0,late:0,absent:0,leave:0,off:0,not_started:0,incomplete:0};
     rows.forEach(r=>{if(counts[r.status]!==undefined)counts[r.status]++});
-    $('reportSummary').innerHTML=[['present','حاضر'],['late','متأخر'],['absent','غائب'],['leave','إجازة'],['not_started','لم يبدأ الشيفت'],['off','راحة']].map(([k,l])=>'<div class="att-card"><div class="n">'+counts[k]+'</div><div class="l">'+l+'</div></div>').join('');
+    $('reportSummary').innerHTML=[['present','حاضر'],['late','متأخر'],['absent','غائب'],['leave','إجازة'],['not_started','لم يبدأ الشيفت'],['incomplete','سجل غير مكتمل'],['off','راحة']].map(([k,l])=>'<div class="att-card"><div class="n">'+counts[k]+'</div><div class="l">'+l+'</div></div>').join('');
     if(!rows.length){$('reportTable').innerHTML='<div class="empty">لا توجد بيانات في الفترة المحددة.</div>';return}
     $('reportTable').innerHTML='<table class="report-table"><thead><tr><th>التاريخ</th><th>الموظف</th><th>الشيفت</th><th>الحالة</th><th>الحضور</th><th>الانصراف</th><th>التأخير</th><th>وصول مبكر</th><th>انصراف مبكر</th><th>إضافي</th><th>ساعات العمل</th></tr></thead><tbody>'+rows.map(r=>'<tr><td>'+dateText(r.work_date)+'</td><td>'+esc(r.employee_name||'—')+'</td><td>'+esc(r.shift_name||'راحة')+(r.shift_start?' ('+String(r.shift_start).slice(0,5)+' - '+String(r.shift_end).slice(0,5)+')':'')+'</td><td><span class="status '+esc(r.status)+'">'+esc(statusText(r.status))+'</span></td><td>'+fmtTime(r.check_in)+'</td><td>'+fmtTime(r.check_out)+'</td><td>'+Number(r.late_minutes||0)+' د</td><td>'+Number(r.early_arrival_minutes||0)+' د</td><td>'+Number(r.early_leave_minutes||0)+' د</td><td>'+Number(r.overtime_minutes||0)+' د</td><td>'+((r.work_minutes!=null)?minsText(r.work_minutes):'—')+'</td></tr>').join('')+'</tbody></table>';
   }finally{reportLoading=false;$('loadReport').disabled=false}
