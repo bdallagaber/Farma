@@ -24,7 +24,7 @@
 <nav><a href="inventory.html">المخزون</a><a href="sales.html">المبيعات</a><a href="invoices.html">🧾 الفواتير</a><a href="customers.html" class="active">👥 العملاء</a><a href="shortages.html">النواقص</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a></nav><div id="sidebarOverlay" class="sidebar-overlay"></div>
 <div class="main-content"><div class="card"><h2>👥 العملاء</h2>
 <div class="cust-toolbar"><div class="cust-search"><input id="searchBox" type="text" placeholder="ابحث بالاسم أو التليفون أو واتساب..."></div><select id="customerFilter"><option value="all">كل العملاء</option><option value="debt">عليهم مديونية</option><option value="vip">VIP</option><option value="overdue">متابعة متأخرة</option></select><button type="button" id="addCustomerBtn">+ عميل جديد</button></div>
-<div class="summary-grid"><div class="summary-card"><div class="summary-label">عدد العملاء</div><div class="summary-value" id="custCount">0</div></div><div class="summary-card"><div class="summary-label">إجمالي المديونية</div><div class="summary-value money" id="totalDebt">0.00 ج.م</div></div></div>
+<div class="summary-grid"><div class="summary-card"><div class="summary-label">عدد العملاء</div><div class="summary-value" id="custCount">0</div></div><div class="summary-card"><div class="summary-label">إجمالي المديونية</div><div class="summary-value money" id="totalDebt">0.00 ج.م</div></div><div class="summary-card"><div class="summary-label">متابعات اليوم</div><div class="summary-value" id="todayFollowups">0</div></div><div class="summary-card"><div class="summary-label">أعلى مديونية</div><div class="summary-value money" id="topDebt">0.00 ج.م</div></div></div>
 <div id="customersWrap"><p class="loading">جاري التحميل...</p></div>
 </div></div>
 <div id="customerModal" class="cust-modal hidden"><div class="cust-paper" id="customerPaperContent"></div></div>
@@ -62,7 +62,7 @@ function renderCustomers(){
   const filter=document.getElementById('customerFilter').value;const filtered=customersCache.filter(c=>{const hay=((c.name||'')+' '+(c.phone||'')+' '+(c.whatsapp||'')).toLowerCase();if(term&&!hay.includes(term))return false;if(filter==='debt'&&c.balance<=0)return false;if(filter==='vip'&&c.category!=='vip')return false;if(filter==='overdue'&&!followupsCache.some(f=>f.customer_id===c.id&&f.status==='open'&&f.next_followup_date<todayStr()))return false;return true});
   document.getElementById('custCount').textContent=customersCache.length.toLocaleString('ar-EG');
   const totalDebt=customersCache.reduce((s,c)=>s+Math.max(c.balance,0),0);
-  document.getElementById('totalDebt').textContent=totalDebt.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م';
+  document.getElementById('totalDebt').textContent=totalDebt.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م';document.getElementById('todayFollowups').textContent=followupsCache.filter(f=>f.status==='open'&&f.next_followup_date===todayStr()).length.toLocaleString('ar-EG');document.getElementById('topDebt').textContent=Math.max(0,...customersCache.map(c=>Number(c.balance||0))).toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م';
   if(!filtered.length){wrap.innerHTML='<p class="loading">مفيش عملاء مطابقين</p>';return}
   let h='<table><thead><tr><th>الاسم</th><th>التليفون</th><th>الرصيد</th></tr></thead><tbody>';
   filtered.sort((a,b)=>b.balance-a.balance).forEach(c=>{
