@@ -1472,7 +1472,7 @@ async function loadCustomers() {
   const { data, error } =
     await sb
       .from('customers')
-      .select('id, name')
+      .select('id, name, credit_limit')
       .order('name');
 
 
@@ -3180,6 +3180,8 @@ document.getElementById(
 
 
       if ((saleType === 'credit' || paidAmount < finalTotal) && !customerId) throw new Error('العميل مطلوب للبيع الآجل أو الدفع الجزئي');
+      let approvedBy=null, overrideReason=null;
+      if (customerId && remainingAmount > 0) { const customer=customersCache.find(x=>x.id===customerId); if (customer?.credit_limit!=null) { const {data:ledgerRows,error:ledgerError}=await sb.from('customer_ledger').select('amount').eq('customer_id',customerId); if(ledgerError) throw ledgerError; const balance=(ledgerRows||[]).reduce((sum,row)=>sum+Number(row.amount||0),0); const projected=balance+remainingAmount; if(projected>Number(customer.credit_limit)){const excess=projected-Number(customer.credit_limit); if(!isAdmin) throw new Error('البيع سيتجاوز حد الائتمان بمبلغ '+excess.toFixed(2)+' ج.م — يلزم موافقة الأدمن'); overrideReason=prompt('البيع سيتجاوز حد الائتمان بمبلغ '+excess.toFixed(2)+' ج.م. اكتب سبب التجاوز:'); if(!overrideReason||overrideReason.trim().length<3) throw new Error('يجب تسجيل سبب تجاوز حد الائتمان'); approvedBy=currentUser.id; } } }
 
       const groupId =
         crypto.randomUUID();
@@ -3220,6 +3222,8 @@ document.getElementById(
             remaining_amount: remainingAmount,
             payment_status: remainingAmount === 0 ? 'paid' : (paidAmount > 0 ? 'partial' : 'unpaid'),
             payment_updated_at: new Date().toISOString(),
+            approved_by: approvedBy,
+            override_reason: overrideReason,
 
             created_by:
               currentUser.id
