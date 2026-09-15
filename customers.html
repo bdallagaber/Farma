@@ -176,7 +176,7 @@ async function addPayment(c){
   if(!val||val<=0){msg.textContent='ادخل قيمة دفعة صحيحة';msg.className='msg error';return}
   msg.textContent='جاري الحفظ...';msg.className='msg';
   const{error}=await sb.from('customer_ledger').insert({customer_id:c.id,amount:-val,note:'دفعة من العميل',created_by:currentUser.id});
-  if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
+  if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}if(data?.id&&productIds.length){const {error:linkError}=await sb.from('customer_followup_products').upsert(productIds.map(product_id=>({followup_id:data.id,product_id})));if(linkError){msg.textContent='تم حفظ المتابعة لكن تعذر ربط الأدوية: '+esc(linkError.message);msg.className='msg error';return}}
   await loadCustomers();
   const updated=customersCache.find(x=>x.id===c.id);
   if(updated){renderCustomerModal(updated,'ledger')}
@@ -218,8 +218,8 @@ function renderFollowupsTab(c){
       '<option value="note">📝 ملاحظة</option>'+
       '<option value="chronic_medication">💊 دواء مزمن (تذكير دوري)</option>'+
     '</select>'+
-    '<div id="fuProductWrap" class="hidden"><label>الصنف</label><select id="fuProduct">'+productOptions+'</select></div>'+
-    '<label>ملاحظة</label><textarea id="fuNote" rows="2" placeholder="تفاصيل المتابعة..."></textarea>'+
+    '<div id="fuProductWrap" class="hidden"><label>الأدوية المرتبطة (يمكن اختيار أكثر من دواء)</label><select id="fuProducts" multiple size="4">'+productOptions.replace('<option value="">-- اختر الصنف --</option>','')+'</select></div>'+
+    '<label>ملاحظة</label><textarea id="fuNote" rows="2" placeholder="تفاصيل المتابعة..."></textarea><label>النتيجة (اختياري)</label><textarea id="fuOutcome" rows="2" placeholder="مثال: العميل لم يرد / سيحضر غدًا"></textarea>'+
     '<label>تاريخ المتابعة القادمة (اختياري)</label><input id="fuNextDate" type="date">'+
     '<div class="msg" id="fuMsg"></div>'+
     '<button type="button" id="addFollowupBtn">+ إضافة متابعة</button>'+
@@ -255,19 +255,19 @@ function renderFollowupsTab(c){
 async function addFollowup(c){
   const msg=document.getElementById('fuMsg');
   const type=document.getElementById('fuType').value;
-  const productId=type==='chronic_medication'?(document.getElementById('fuProduct').value||null):null;
+  const productIds=type==='chronic_medication'?Array.from(document.getElementById('fuProducts').selectedOptions).map(o=>o.value):[];const productId=productIds[0]||null;const outcome=document.getElementById('fuOutcome').value.trim()||null;
   const note=document.getElementById('fuNote').value.trim()||null;
   const nextDate=document.getElementById('fuNextDate').value||null;
   if(!note&&!nextDate){msg.textContent='اكتب ملاحظة أو حدد تاريخ متابعة قادمة على الأقل';msg.className='msg error';return}
   msg.textContent='جاري الحفظ...';msg.className='msg';
-  const{error}=await sb.from('customer_followups').insert({customer_id:c.id,followup_type:type,product_id:productId,note,next_followup_date:nextDate,created_by:currentUser.id});
+  const{error}=await sb.from('customer_followups').insert({customer_id:c.id,followup_type:type,product_id:productId,note,outcome,next_followup_date:nextDate,created_by:currentUser.id}).select('id').single();
   if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
   await loadCustomers();
   const updated=customersCache.find(x=>x.id===c.id);
   if(updated)renderCustomerModal(updated,'followups');
 }
 async function markFollowupDone(c,id){
-  await sb.from('customer_followups').update({status:'done'}).eq('id',id);
+  const outcome=prompt('اكتب نتيجة المتابعة (اختياري)')||null;await sb.from('customer_followups').update({status:'done',outcome,completed_at:new Date().toISOString(),completed_by:currentUser.id}).eq('id',id);
   await loadCustomers();
   const updated=customersCache.find(x=>x.id===c.id);
   if(updated)renderCustomerModal(updated,'followups');
