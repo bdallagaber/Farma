@@ -18,6 +18,30 @@
 .followup-row{padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}.followup-row:last-child{border-bottom:0}.followup-row.done{opacity:.55}.followup-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.followup-type{font-weight:700}.followup-type.call{color:var(--primary-dark)}.followup-type.complaint{color:var(--danger)}.followup-type.chronic_medication{color:var(--warning)}.followup-type.note{color:var(--text)}.followup-meta{font-size:11px;color:var(--text-muted);margin-top:3px}.followup-actions{display:flex;gap:6px}.followup-actions button{padding:4px 9px;font-size:11px;margin:0}.followup-next{font-size:11px;font-weight:700;margin-top:4px}.followup-next.overdue{color:var(--danger)}.followup-next.soon{color:var(--warning)}
 .followup-form{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px}.followup-form label{margin-top:0}
 .badge-alert{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px}.badge-alert.overdue{background:var(--danger)}.badge-alert.soon{background:var(--warning)}
+/* إصلاح نافذة العميل وتخطيط جدول العملاء على الهاتف */
+.cust-modal{z-index:3000!important;isolation:isolate}
+.cust-paper{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
+.tab-btn,.tab-btn:hover,.tab-btn:focus,.tab-btn:active{outline:none;box-shadow:none;-webkit-tap-highlight-color:transparent}
+.tab-btn.active{box-shadow:none}
+@media(max-width:700px){
+  .main-content{min-width:0;overflow-x:hidden}
+  #customersWrap{width:100%;overflow-x:hidden}
+  #customersWrap table{width:100%;min-width:0!important;table-layout:fixed;border-collapse:collapse}
+  #customersWrap th,#customersWrap td{padding:9px 6px;font-size:12px;white-space:normal;overflow-wrap:anywhere;word-break:break-word;vertical-align:middle}
+  #customersWrap th:first-child,#customersWrap td:first-child{width:42%}
+  #customersWrap th:nth-child(2),#customersWrap td:nth-child(2){width:30%}
+  #customersWrap th:nth-child(3),#customersWrap td:nth-child(3){width:28%;text-align:center}
+  .cust-toolbar{gap:7px}
+  .cust-search{min-width:100%;flex-basis:100%}
+  .cust-toolbar select{flex:1;min-width:0;height:40px}
+  .cust-toolbar button{flex:0 0 auto}
+  .cust-modal{padding:12px;align-items:flex-start}
+  .cust-paper{width:100%;max-width:none;margin:0;padding:16px;border-radius:12px}
+  .cust-header{position:sticky;top:-16px;background:#fff;z-index:2;padding-top:4px}
+  .tabs{overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab-btn{flex:0 0 auto;padding:10px 6px;font-size:12px}
+}
 </style></head>
 <body class="has-sidebar">
 <header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px">خروج</button></div></header>
