@@ -29,7 +29,7 @@
 </div></div>
 <div id="customerModal" class="cust-modal hidden"><div class="cust-paper" id="customerPaperContent"></div></div>
 <script src="config.js"></script><script>
-let currentUser,customersCache=[],salesCache=[],ledgerCache=[],followupsCache=[],productsCache=[];
+let currentUser,customersCache=[],salesCache=[],ledgerCache=[],followupsCache=[],productsCache=[],invoicesCache=[];
 const FOLLOWUP_LABELS={call:'📞 مكالمة',complaint:'⚠️ شكوى',note:'📝 ملاحظة',chronic_medication:'💊 دواء مزمن'};
 function todayStr(){return new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'})}
 function followupUrgency(d){if(!d)return'';if(d<todayStr())return'overdue';const in7=new Date();in7.setDate(in7.getDate()+7);if(d<=in7.toLocaleDateString('en-CA'))return'soon';return''}
@@ -40,15 +40,15 @@ function dFormat(v){return new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/
 
 async function loadCustomers(){
   const wrap=document.getElementById('customersWrap');
-  const [{data:custs,error},{data:ledger},{data:sales},{data:followups},{data:products}]=await Promise.all([
+  const [{data:custs,error},{data:ledger},{data:sales},{data:followups},{data:products},{data:invoices}]=await Promise.all([
     sb.from('customers').select('id,name,phone,whatsapp,area,address,notes,category,status,credit_limit,created_at').order('name'),
     sb.from('customer_ledger').select('id,customer_id,amount,note,created_at,created_by,profiles(full_name)'),
     sb.from('sales').select('id,sale_group_id,customer_id,product_id,quantity,unit_sold,sale_price,created_at,products(name)').not('customer_id','is',null).order('created_at',{ascending:false}),
     sb.from('customer_followups').select('id,customer_id,followup_type,product_id,note,next_followup_date,status,created_at,created_by,products(name),profiles(full_name)').order('created_at',{ascending:false}),
-    sb.from('products').select('id,name').order('name')
+    sb.from('products').select('id,name').order('name'),sb.from('invoices').select('sale_group_id,invoice_number,customer_id,total,paid_amount,remaining_amount,payment_status,created_at').order('created_at',{ascending:false})
   ]);
   if(error){wrap.innerHTML='<p style="color:#dc2626">تعذّر تحميل العملاء: '+esc(error.message)+'</p>';return}
-  ledgerCache=ledger||[];salesCache=sales||[];followupsCache=followups||[];productsCache=products||[];
+  ledgerCache=ledger||[];salesCache=sales||[];followupsCache=followups||[];productsCache=products||[];invoicesCache=invoices||[];
   customersCache=(custs||[]).map(c=>{
     const bal=ledgerCache.filter(l=>l.customer_id===c.id).reduce((s,l)=>s+Number(l.amount||0),0);
     return {...c,balance:bal};
@@ -156,7 +156,7 @@ function renderLedgerTab(c){
   const entries=ledgerCache.filter(l=>l.customer_id===c.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   const balance=c.balance;
   let h='<div class="balance-box"><div style="font-size:11px;color:var(--text-muted)">الرصيد الحالي (المديونية)</div><div class="amount '+(balance>0?'pos':'zero')+'">'+balance.toFixed(2)+' ج.م</div></div>';
-  h+='<div style="display:flex;gap:8px;margin-bottom:14px"><input id="paymentAmount" type="number" step="0.01" min="0" placeholder="قيمة الدفعة" style="margin:0"><button type="button" id="addPaymentBtn" style="white-space:nowrap">تسجيل دفعة</button></div>';
+  const openInvoices=invoicesCache.filter(i=>i.customer_id===c.id&&Number(i.remaining_amount||0)>0);h+='<div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap"><select id="paymentInvoice" style="margin:0;flex:1"><option value="">دفعة عامة على الحساب</option>'+openInvoices.map(i=>'<option value="'+esc(i.sale_group_id)+'">فاتورة #'+esc(i.invoice_number)+' — متبقي '+Number(i.remaining_amount||0).toFixed(2)+' ج</option>').join('')+'</select><input id="paymentAmount" type="number" step="0.01" min="0" placeholder="قيمة الدفعة" style="margin:0;flex:1"><button type="button" id="addPaymentBtn" style="white-space:nowrap">تسجيل دفعة</button></div>';
   h+='<div class="msg" id="ledgerMsg"></div>';
   if(!entries.length){
     h+='<p class="loading">مفيش حركات في الرصيد</p>';
@@ -171,12 +171,12 @@ function renderLedgerTab(c){
 }
 async function addPayment(c){
   const msg=document.getElementById('ledgerMsg');
-  const input=document.getElementById('paymentAmount');
+  const input=document.getElementById('paymentAmount');const saleGroupId=document.getElementById('paymentInvoice').value||null;
   const val=parseFloat(input.value);
   if(!val||val<=0){msg.textContent='ادخل قيمة دفعة صحيحة';msg.className='msg error';return}
   msg.textContent='جاري الحفظ...';msg.className='msg';
-  const{error}=await sb.from('customer_ledger').insert({customer_id:c.id,amount:-val,note:'دفعة من العميل',created_by:currentUser.id});
-  if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}if(data?.id&&productIds.length){const {error:linkError}=await sb.from('customer_followup_products').upsert(productIds.map(product_id=>({followup_id:data.id,product_id})));if(linkError){msg.textContent='تم حفظ المتابعة لكن تعذر ربط الأدوية: '+esc(linkError.message);msg.className='msg error';return}}
+  const selectedInvoice=invoicesCache.find(i=>i.sale_group_id===saleGroupId);if(selectedInvoice&&val>Number(selectedInvoice.remaining_amount||0)){msg.textContent='قيمة الدفعة أكبر من المتبقي في الفاتورة';msg.className='msg error';return}const{error}=await sb.from('customer_ledger').insert({customer_id:c.id,sale_group_id:saleGroupId,amount:-val,entry_type:'payment',note:saleGroupId?'دفعة على فاتورة #'+(selectedInvoice?.invoice_number||''):'دفعة من العميل',created_by:currentUser.id});
+  if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}if(selectedInvoice){const newPaid=Number(selectedInvoice.paid_amount||0)+val;const newRemaining=Math.max(0,Number(selectedInvoice.total||0)-newPaid);const {error:updateError}=await sb.from('invoices').update({paid_amount:newPaid,remaining_amount:newRemaining,payment_status:newRemaining===0?'paid':'partial',payment_updated_at:new Date().toISOString()}).eq('sale_group_id',saleGroupId);if(updateError){msg.textContent='تم تسجيل الدفعة لكن تعذر تحديث الفاتورة: '+esc(updateError.message);msg.className='msg error';return}}
   await loadCustomers();
   const updated=customersCache.find(x=>x.id===c.id);
   if(updated){renderCustomerModal(updated,'ledger')}
@@ -188,9 +188,9 @@ function renderHistoryTab(c){
   const groups={};
   rows.forEach(s=>{
     const key=s.sale_group_id||('single-'+s.id);
-    if(!groups[key])groups[key]={key,created_at:s.created_at,items:0,total:0};
+    if(!groups[key]){const inv=invoicesCache.find(i=>i.sale_group_id===s.sale_group_id);groups[key]={key,created_at:s.created_at,items:0,total:inv?.total!=null?Number(inv.total):0,invoice:inv};}
     groups[key].items+=1;
-    groups[key].total+=Number(s.sale_price||0);
+    if(!groups[key].invoice)groups[key].total+=Number(s.sale_price||0);
   });
   const list=Object.values(groups).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
   let h='';
@@ -198,7 +198,7 @@ function renderHistoryTab(c){
     h='<p class="loading">مفيش مشتريات مسجلة لهذا العميل</p>';
   }else{
     list.forEach(g=>{
-      h+='<div class="purchase-row"><span>'+dFormat(g.created_at)+' — '+g.items+' صنف</span><span>'+g.total.toFixed(2)+' ج</span></div>';
+      h+='<div class="purchase-row"><span><strong>فاتورة #'+esc(g.invoice?.invoice_number||'—')+'</strong><br>'+dFormat(g.created_at)+' — '+g.items+' صنف</span><span>'+g.total.toFixed(2)+' ج<br><small>متبقي '+Number(g.invoice?.remaining_amount||0).toFixed(2)+' ج</small></span></div>';
     });
   }
   pane.innerHTML=h;
