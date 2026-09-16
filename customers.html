@@ -25,7 +25,7 @@
 <div class="main-content"><div class="card"><h2>👥 العملاء</h2>
 <div class="cust-toolbar"><div class="cust-search"><input id="searchBox" type="text" placeholder="ابحث بالاسم أو التليفون أو واتساب..."></div><select id="customerFilter"><option value="all">كل العملاء</option><option value="debt">عليهم مديونية</option><option value="vip">VIP</option><option value="overdue">متابعة متأخرة</option></select><button type="button" id="addCustomerBtn">+ عميل جديد</button></div>
 <div class="summary-grid"><div class="summary-card"><div class="summary-label">عدد العملاء</div><div class="summary-value" id="custCount">0</div></div><div class="summary-card"><div class="summary-label">إجمالي المديونية</div><div class="summary-value money" id="totalDebt">0.00 ج.م</div></div><div class="summary-card"><div class="summary-label">متابعات اليوم</div><div class="summary-value" id="todayFollowups">0</div></div><div class="summary-card"><div class="summary-label">أعلى مديونية</div><div class="summary-value money" id="topDebt">0.00 ج.م</div></div></div>
-<div id="customersWrap"><p class="loading">جاري التحميل...</p></div>
+<div id="customersWrap"><p class="loading">جاري التحميل...</p></div><details class="card collapsible" style="margin-top:14px"><summary><h2>📊 تقارير CRM</h2></summary><div id="crmReports"><p class="loading">جاري إعداد التقارير...</p></div></details>
 </div></div>
 <div id="customerModal" class="cust-modal hidden"><div class="cust-paper" id="customerPaperContent"></div></div>
 <script src="config.js"></script><script>
@@ -53,9 +53,11 @@ async function loadCustomers(){
     const bal=ledgerCache.filter(l=>l.customer_id===c.id).reduce((s,l)=>s+Number(l.amount||0),0);
     return {...c,balance:bal};
   });
-  renderCustomers();
+  renderCustomers();renderCrmReports();
 }
 function balanceFor(id){const c=customersCache.find(x=>x.id===id);return c?c.balance:0}
+function renderCrmReports(){const el=document.getElementById('crmReports');if(!el)return;const by={};salesCache.forEach(x=>{if(!x.customer_id)return;const c=customersCache.find(y=>y.id===x.customer_id);if(!c)return;if(!by[c.id])by[c.id]={name:c.name,total:0,count:0,balance:c.balance||0,last:x.created_at};by[c.id].total+=Number(x.sale_price||0)*Number(x.quantity||1);by[c.id].count++;if(new Date(x.created_at)>new Date(by[c.id].last))by[c.id].last=x.created_at});const rows=Object.values(by);const top=[...rows].sort((a,b)=>b.total-a.total).slice(0,10);const debt=[...customersCache].filter(c=>c.balance>0).sort((a,b)=>b.balance-a.balance).slice(0,10);const dormant=rows.filter(r=>(Date.now()-new Date(r.last).getTime())>30*86400000).sort((a,b)=>new Date(a.last)-new Date(b.last)).slice(0,10);const overdue=followupsCache.filter(f=>f.status==='open'&&f.next_followup_date&&f.next_followup_date<todayStr());el.innerHTML='<div class="summary-grid"><div class="summary-card"><div class="summary-label">متابعات متأخرة</div><div class="summary-value">'+overdue.length+'</div></div><div class="summary-card"><div class="summary-label">عملاء بمديونية</div><div class="summary-value">'+customersCache.filter(c=>c.balance>0).length+'</div></div></div><h3>الأكثر شراءً</h3>'+reportRows(top,r=>r.name+' — '+r.total.toFixed(2)+' ج.م')+'<h3>أعلى المديونيات</h3>'+reportRows(debt,c=>c.name+' — '+Number(c.balance||0).toFixed(2)+' ج.م')+'<h3>لم يشتروا منذ أكثر من 30 يومًا</h3>'+reportRows(dormant,r=>r.name+' — آخر شراء '+dFormat(r.last));}
+function reportRows(rows,fn){return rows.length?'<div>'+rows.map(r=>'<div class="purchase-row">'+esc(fn(r))+'</div>').join('')+'</div>':'<p class="loading">لا توجد بيانات</p>'}
 function renderCustomers(){
   const wrap=document.getElementById('customersWrap');
   const term=document.getElementById('searchBox').value.trim().toLowerCase();
