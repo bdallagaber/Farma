@@ -29,7 +29,7 @@
 </div></div>
 <div id="customerModal" class="cust-modal hidden"><div class="cust-paper" id="customerPaperContent"></div></div>
 <script src="config.js"></script><script>
-let currentUser,customersCache=[],salesCache=[],ledgerCache=[],followupsCache=[],productsCache=[],invoicesCache=[];
+let currentUser,customersCache=[],salesCache=[],ledgerCache=[],followupsCache=[],productsCache=[],invoicesCache=[],employeesCache=[];
 const FOLLOWUP_LABELS={call:'📞 مكالمة',complaint:'⚠️ شكوى',note:'📝 ملاحظة',chronic_medication:'💊 دواء مزمن'};
 function todayStr(){return new Date().toLocaleDateString('en-CA',{timeZone:'Africa/Cairo'})}
 function followupUrgency(d){if(!d)return'';if(d<todayStr())return'overdue';const in7=new Date();in7.setDate(in7.getDate()+7);if(d<=in7.toLocaleDateString('en-CA'))return'soon';return''}
@@ -40,15 +40,15 @@ function dFormat(v){return new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/
 
 async function loadCustomers(){
   const wrap=document.getElementById('customersWrap');
-  const [{data:custs,error},{data:ledger},{data:sales},{data:followups},{data:products},{data:invoices}]=await Promise.all([
+  const [{data:custs,error},{data:ledger},{data:sales},{data:followups},{data:products},{data:invoices},{data:employees}]=await Promise.all([
     sb.from('customers').select('id,name,phone,whatsapp,area,address,notes,category,status,credit_limit,created_at').order('name'),
     sb.from('customer_ledger').select('id,customer_id,amount,note,created_at,created_by,profiles(full_name)'),
     sb.from('sales').select('id,sale_group_id,customer_id,product_id,quantity,unit_sold,sale_price,created_at,products(name)').not('customer_id','is',null).order('created_at',{ascending:false}),
     sb.from('customer_followups').select('id,customer_id,followup_type,product_id,note,next_followup_date,status,created_at,created_by,products(name),profiles(full_name)').order('created_at',{ascending:false}),
-    sb.from('products').select('id,name').order('name'),sb.from('invoices').select('sale_group_id,invoice_number,customer_id,total,paid_amount,remaining_amount,payment_status,created_at').order('created_at',{ascending:false})
+    sb.from('products').select('id,name').order('name'),sb.from('invoices').select('sale_group_id,invoice_number,customer_id,total,paid_amount,remaining_amount,payment_status,created_at').order('created_at',{ascending:false}),sb.from('profiles').select('id,full_name').order('full_name')
   ]);
   if(error){wrap.innerHTML='<p style="color:#dc2626">تعذّر تحميل العملاء: '+esc(error.message)+'</p>';return}
-  ledgerCache=ledger||[];salesCache=sales||[];followupsCache=followups||[];productsCache=products||[];invoicesCache=invoices||[];
+  ledgerCache=ledger||[];salesCache=sales||[];followupsCache=followups||[];productsCache=products||[];invoicesCache=invoices||[];employeesCache=employees||[];
   customersCache=(custs||[]).map(c=>{
     const bal=ledgerCache.filter(l=>l.customer_id===c.id).reduce((s,l)=>s+Number(l.amount||0),0);
     return {...c,balance:bal};
@@ -233,12 +233,12 @@ function renderFollowupsTab(c){
         '<div class="followup-top"><div>'+
           '<span class="followup-type '+esc(f.followup_type)+'">'+(FOLLOWUP_LABELS[f.followup_type]||f.followup_type)+'</span>'+
           (f.products?' — '+esc(f.products.name):'')+
-          '<div class="followup-meta">'+dFormat(f.created_at)+(f.profiles?' — '+esc(f.profiles.full_name):'')+'</div>'+
+          '<div class="followup-meta">'+dFormat(f.created_at)+(f.profiles?' — '+esc(f.profiles.full_name):'')+(f.assigned_to?' — مسؤول: '+esc((employeesCache.find(e=>e.id===f.assigned_to)||{}).full_name||'غير معروف'):'')+'</div>'+
           (f.note?'<div style="margin-top:4px">'+esc(f.note)+'</div>':'')+
           (f.next_followup_date?'<div class="followup-next '+urgency+'">📅 المتابعة القادمة: '+esc(f.next_followup_date)+(urgency==='overdue'?' (متأخرة)':urgency==='soon'?' (قريبة)':'')+'</div>':'')+
         '</div>'+
         '<div class="followup-actions">'+
-          (f.status==='open'?'<button type="button" class="secondary fu-done-btn" data-id="'+esc(f.id)+'">تمت</button>':'')+
+          (f.status==='open'?'<button type="button" class="secondary fu-postpone-btn" data-id="'+esc(f.id)+'">تأجيل</button><button type="button" class="secondary fu-done-btn" data-id="'+esc(f.id)+'">تمت</button>':'')+
           '<button type="button" class="danger fu-del-btn" data-id="'+esc(f.id)+'">حذف</button>'+
         '</div></div>'+
       '</div>';
@@ -249,23 +249,24 @@ function renderFollowupsTab(c){
     document.getElementById('fuProductWrap').classList.toggle('hidden',e.target.value!=='chronic_medication');
   });
   document.getElementById('addFollowupBtn').onclick=()=>addFollowup(c);
-  pane.querySelectorAll('.fu-done-btn').forEach(b=>b.addEventListener('click',()=>markFollowupDone(c,b.dataset.id)));
+  pane.querySelectorAll('.fu-done-btn').forEach(b=>b.addEventListener('click',()=>markFollowupDone(c,b.dataset.id)));pane.querySelectorAll('.fu-postpone-btn').forEach(b=>b.addEventListener('click',()=>postponeFollowup(c,b.dataset.id)));
   pane.querySelectorAll('.fu-del-btn').forEach(b=>b.addEventListener('click',()=>deleteFollowup(c,b.dataset.id)));
 }
 async function addFollowup(c){
   const msg=document.getElementById('fuMsg');
   const type=document.getElementById('fuType').value;
-  const productIds=type==='chronic_medication'?Array.from(document.getElementById('fuProducts').selectedOptions).map(o=>o.value):[];const productId=productIds[0]||null;const outcome=document.getElementById('fuOutcome').value.trim()||null;
+  const productIds=type==='chronic_medication'?Array.from(document.getElementById('fuProducts').selectedOptions).map(o=>o.value):[];const productId=productIds[0]||null;const assignedTo=document.getElementById('fuAssignee').value||null;const outcome=document.getElementById('fuOutcome').value.trim()||null;
   const note=document.getElementById('fuNote').value.trim()||null;
   const nextDate=document.getElementById('fuNextDate').value||null;
   if(!note&&!nextDate){msg.textContent='اكتب ملاحظة أو حدد تاريخ متابعة قادمة على الأقل';msg.className='msg error';return}
   msg.textContent='جاري الحفظ...';msg.className='msg';
-  const{error}=await sb.from('customer_followups').insert({customer_id:c.id,followup_type:type,product_id:productId,note,outcome,next_followup_date:nextDate,created_by:currentUser.id}).select('id').single();
+  const{error}=await sb.from('customer_followups').insert({customer_id:c.id,followup_type:type,product_id:productId,note,outcome,assigned_to:assignedTo,next_followup_date:nextDate,created_by:currentUser.id}).select('id').single();
   if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
   await loadCustomers();
   const updated=customersCache.find(x=>x.id===c.id);
   if(updated)renderCustomerModal(updated,'followups');
 }
+async function postponeFollowup(c,id){const next=prompt('اكتب تاريخ المتابعة الجديد بصيغة YYYY-MM-DD');if(!next||!/\d{4}-\d{2}-\d{2}/.test(next))return;await sb.from('customer_followups').update({status:'open',next_followup_date:next}).eq('id',id);await loadCustomers();const updated=customersCache.find(x=>x.id===c.id);if(updated)renderCustomerModal(updated,'followups')}
 async function markFollowupDone(c,id){
   const outcome=prompt('اكتب نتيجة المتابعة (اختياري)')||null;await sb.from('customer_followups').update({status:'done',outcome,completed_at:new Date().toISOString(),completed_by:currentUser.id}).eq('id',id);
   await loadCustomers();
