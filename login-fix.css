@@ -23,3 +23,37 @@ body.login-page > .card {
   margin: 0 auto !important;
   flex: 0 0 auto;
 }
+
+
+/* Mobile keyboard stability: avoid recentering a fixed 100vh flex layout on every viewport resize. */
+html:has(body.login-page), body.login-page {
+  overscroll-behavior: none;
+}
+body.login-page input,
+body.login-page button {
+  font-size: 16px;
+}
+@media (max-width: 600px) {
+  body.login-page {
+    position: relative;
+    inset: auto;
+    width: 100%;
+    min-height: 100svh;
+    height: auto;
+    max-height: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)) !important;
+  }
+  body.login-page > .card {
+    width: min(380px, 100%) !important;
+    margin: 12px auto 0 !important;
+    transform: none !important;
+  }
+  body.login-page input:focus {
+    scroll-margin-top: 18px;
+    scroll-margin-bottom: 18px;
+  }
+}
