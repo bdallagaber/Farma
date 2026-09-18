@@ -22,7 +22,7 @@
 .cust-modal{z-index:3000!important;isolation:isolate}
 .cust-paper{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
 .tab-btn,.tab-btn:hover,.tab-btn:focus,.tab-btn:active{outline:none;box-shadow:none;-webkit-tap-highlight-color:transparent}
-.tab-btn.active{box-shadow:none!important;background:transparent!important}.tab-btn:focus{background:transparent!important}.tab-btn:focus:not(:focus-visible){outline:none!important}
+.tab-btn.active{box-shadow:none!important;background:transparent!important}.tab-btn:focus,.tab-btn:active{background:#f1f3f5!important;box-shadow:none!important;outline:none!important}.tab-btn:focus:not(:focus-visible){outline:none!important}.tab-btn{-webkit-tap-highlight-color:transparent}
 @media(max-width:700px){
   .main-content{min-width:0;overflow-x:hidden}
   #customersWrap{width:100%;overflow-x:hidden}
@@ -114,10 +114,10 @@ function closeCustomer(){document.getElementById('customerModal').classList.add(
 document.getElementById('customerModal').addEventListener('click',e=>{if(e.target.id==='customerModal')closeCustomer()});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeCustomer()});
 
-function renderCustomerModal(c,activeTab){
+function renderCustomerModal(c,activeTab,editMode=false){
   const p=document.getElementById('customerPaperContent');
   p.innerHTML=
-    '<div class="cust-header"><h2>'+esc(c.name)+'</h2><button type="button" class="cust-close" id="custClose">×</button></div>'+
+    '<div class="cust-header"><h2>'+esc(c.name)+'</h2><div style="display:flex;align-items:center;gap:6px"><button type="button" class="secondary small" id="headerEditBtn">✏️ تعديل</button><button type="button" class="danger small" id="headerDeleteBtn">🗑️ حذف</button><button type="button" class="cust-close" id="custClose">×</button></div></div>'+
     '<div class="tabs">'+
       '<button type="button" class="tab-btn" data-tab="info">البيانات</button>'+
       '<button type="button" class="tab-btn" data-tab="ledger">الرصيد</button>'+
@@ -128,9 +128,9 @@ function renderCustomerModal(c,activeTab){
     '<div class="tab-pane" id="paneLedger"></div>'+
     '<div class="tab-pane" id="paneHistory"></div>'+
     '<div class="tab-pane" id="paneFollowups"></div><div class="tab-pane" id="paneTimeline"></div>';
-  document.getElementById('custClose').onclick=closeCustomer;
+  document.getElementById('custClose').onclick=closeCustomer;document.getElementById('headerEditBtn').onclick=()=>renderCustomerModal(c,'info',true);document.getElementById('headerDeleteBtn').onclick=()=>deleteCustomer(c);
   p.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{switchTab(c,b.dataset.tab);b.blur()}));
-  renderInfoTab(c);
+  renderInfoTab(c,editMode);
   renderLedgerTab(c);
   renderHistoryTab(c);
   renderFollowupsTab(c);renderTimelineTab(c);
@@ -144,7 +144,7 @@ function switchTab(c,tab){
   document.getElementById('paneFollowups').classList.toggle('active',tab==='followups');document.getElementById('paneTimeline').classList.toggle('active',tab==='timeline');
 }
 
-function renderInfoTab(c){
+function renderInfoTab(c,editable=false){
   const pane=document.getElementById('paneInfo');
   pane.innerHTML=
     '<div class="summary-grid"><div class="summary-card"><div class="summary-label">الرصيد المستحق</div><div class="summary-value money">'+Number(c.balance||0).toFixed(2)+' ج.م</div></div><div class="summary-card"><div class="summary-label">عدد المشتريات</div><div class="summary-value">'+salesCache.filter(x=>x.customer_id===c.id).length+'</div></div></div>'+'<label>الاسم</label><input id="editName" type="text" value="'+esc(c.name)+'">'+
@@ -157,8 +157,8 @@ function renderInfoTab(c){
     '<label>ملاحظات</label><textarea id="editNotes" rows="2">'+esc(c.notes||'')+'</textarea>'+
     '<label>حد الائتمان (اختياري)</label><input id="editCreditLimit" type="number" step="0.01" value="'+(c.credit_limit!=null?c.credit_limit:'')+'">'+
     '<div class="msg" id="infoMsg"></div>'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" id="saveInfoBtn">💾 حفظ التعديلات</button><button type="button" id="deleteCustomerBtn" class="danger">🗑️ حذف العميل</button></div>';
-  document.getElementById('editCategory').value=c.category||'regular';document.getElementById('editStatus').value=c.status||'active';document.getElementById('saveInfoBtn').onclick=()=>saveCustomerInfo(c);document.getElementById('deleteCustomerBtn').onclick=()=>deleteCustomer(c);
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" id="infoEditBtn" class="secondary">✏️ تعديل البيانات</button><button type="button" id="saveInfoBtn" class="hidden">💾 حفظ التعديل</button></div>';
+  document.getElementById('editCategory').value=c.category||'regular';document.getElementById('editStatus').value=c.status||'active';const fields=pane.querySelectorAll('input,select,textarea');fields.forEach(f=>f.disabled=!editable);const saveBtn=document.getElementById('saveInfoBtn');const editBtn=document.getElementById('infoEditBtn');saveBtn.classList.toggle('hidden',!editable);editBtn.classList.toggle('hidden',editable);editBtn.onclick=()=>renderCustomerModal(c,'info',true);saveBtn.onclick=()=>saveCustomerInfo(c);
 }
 async function saveCustomerInfo(c){
   const msg=document.getElementById('infoMsg');
