@@ -22,7 +22,7 @@
 .cust-modal{z-index:3000!important;isolation:isolate}
 .cust-paper{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
 .tab-btn,.tab-btn:hover,.tab-btn:focus,.tab-btn:active{outline:none;box-shadow:none;-webkit-tap-highlight-color:transparent}
-.tab-btn.active{box-shadow:none}
+.tab-btn.active{box-shadow:none!important;background:transparent!important}.tab-btn:focus{background:transparent!important}.tab-btn:focus:not(:focus-visible){outline:none!important}
 @media(max-width:700px){
   .main-content{min-width:0;overflow-x:hidden}
   #customersWrap{width:100%;overflow-x:hidden}
@@ -65,7 +65,7 @@ function dFormat(v){return new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/
 async function loadCustomers(){
   const wrap=document.getElementById('customersWrap');
   const [{data:custs,error},{data:ledger},{data:sales},{data:followups},{data:products},{data:invoices},{data:employees}]=await Promise.all([
-    sb.from('customers').select('id,name,phone,whatsapp,area,address,notes,category,status,credit_limit,created_at').order('name'),
+    sb.from('customers').select('id,name,phone,whatsapp,area,address,location,notes,category,status,credit_limit,created_at').order('name'),
     sb.from('customer_ledger').select('id,customer_id,amount,note,created_at,created_by,profiles(full_name)'),
     sb.from('sales').select('id,sale_group_id,customer_id,product_id,quantity,unit_sold,sale_price,created_at,products(name)').not('customer_id','is',null).order('created_at',{ascending:false}),
     sb.from('customer_followups').select('id,customer_id,followup_type,product_id,note,next_followup_date,status,created_at,created_by,products(name),profiles(full_name)').order('created_at',{ascending:false}),
@@ -129,7 +129,7 @@ function renderCustomerModal(c,activeTab){
     '<div class="tab-pane" id="paneHistory"></div>'+
     '<div class="tab-pane" id="paneFollowups"></div><div class="tab-pane" id="paneTimeline"></div>';
   document.getElementById('custClose').onclick=closeCustomer;
-  p.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(c,b.dataset.tab)));
+  p.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>{switchTab(c,b.dataset.tab);b.blur()}));
   renderInfoTab(c);
   renderLedgerTab(c);
   renderHistoryTab(c);
@@ -151,14 +151,14 @@ function renderInfoTab(c){
     '<label>التليفون</label><input id="editPhone" type="text" value="'+esc(c.phone||'')+'">'+
     '<label>واتساب</label><input id="editWhatsapp" type="text" value="'+esc(c.whatsapp||'')+'">'+
     '<label>المنطقة</label><input id="editArea" type="text" value="'+esc(c.area||'')+'">'+
-    '<label>العنوان</label><input id="editAddress" type="text" value="'+esc(c.address||'')+'">'+
+    '<label>العنوان</label><input id="editAddress" type="text" value="'+esc(c.address||'')+'">'+ '<label>اللوكيشن</label><input id="editLocation" type="text" value="'+esc(c.location||'')+'" placeholder="رابط Google Maps أو وصف المكان">'+
     '<label>التصنيف</label><select id="editCategory"><option value="regular">عادي</option><option value="vip">VIP</option><option value="clinic">عيادة / شركة</option><option value="debtor">آجل</option></select>'+
     '<label>الحالة</label><select id="editStatus"><option value="active">نشط</option><option value="inactive">غير نشط</option><option value="blocked">موقوف</option></select>'+
     '<label>ملاحظات</label><textarea id="editNotes" rows="2">'+esc(c.notes||'')+'</textarea>'+
     '<label>حد الائتمان (اختياري)</label><input id="editCreditLimit" type="number" step="0.01" value="'+(c.credit_limit!=null?c.credit_limit:'')+'">'+
     '<div class="msg" id="infoMsg"></div>'+
-    '<button type="button" id="saveInfoBtn">💾 حفظ التعديلات</button>';
-  document.getElementById('editCategory').value=c.category||'regular';document.getElementById('editStatus').value=c.status||'active';document.getElementById('saveInfoBtn').onclick=()=>saveCustomerInfo(c);
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button type="button" id="saveInfoBtn">💾 حفظ التعديلات</button><button type="button" id="deleteCustomerBtn" class="danger">🗑️ حذف العميل</button></div>';
+  document.getElementById('editCategory').value=c.category||'regular';document.getElementById('editStatus').value=c.status||'active';document.getElementById('saveInfoBtn').onclick=()=>saveCustomerInfo(c);document.getElementById('deleteCustomerBtn').onclick=()=>deleteCustomer(c);
 }
 async function saveCustomerInfo(c){
   const msg=document.getElementById('infoMsg');
@@ -166,10 +166,10 @@ async function saveCustomerInfo(c){
   const phone=document.getElementById('editPhone').value.trim()||null;
   const creditLimitVal=document.getElementById('editCreditLimit').value;
   const creditLimit=creditLimitVal===''?null:parseFloat(creditLimitVal);
-  const whatsapp=document.getElementById('editWhatsapp').value.trim()||null;const area=document.getElementById('editArea').value.trim()||null;const address=document.getElementById('editAddress').value.trim()||null;const category=document.getElementById('editCategory').value||'regular';const status=document.getElementById('editStatus').value||'active';const notes=document.getElementById('editNotes').value.trim()||null;
+  const whatsapp=document.getElementById('editWhatsapp').value.trim()||null;const location=document.getElementById('editLocation').value.trim()||null;const area=document.getElementById('editArea').value.trim()||null;const address=document.getElementById('editAddress').value.trim()||null;const category=document.getElementById('editCategory').value||'regular';const status=document.getElementById('editStatus').value||'active';const notes=document.getElementById('editNotes').value.trim()||null;
   if(!name){msg.textContent='اسم العميل مطلوب';msg.className='msg error';return}
   msg.textContent='جاري الحفظ...';msg.className='msg';
-  const{error}=await sb.from('customers').update({name,phone,whatsapp,area,address,category,status,notes,credit_limit:creditLimit}).eq('id',c.id);
+  const{error}=await sb.from('customers').update({name,phone,whatsapp,area,address,location,category,status,notes,credit_limit:creditLimit}).eq('id',c.id);
   if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
   msg.textContent='تم الحفظ بنجاح';msg.className='msg ok';
   await loadCustomers();
@@ -177,6 +177,7 @@ async function saveCustomerInfo(c){
   if(updated)renderCustomerModal(updated,'info');
 }
 
+async function deleteCustomer(c){if(!confirm('هل أنت متأكد من حذف العميل «'+c.name+'»؟\nلن يتم حذف فواتيره أو حركاته المالية.'))return;const btn=document.getElementById('deleteCustomerBtn');if(btn){btn.disabled=true;btn.textContent='جاري الحذف...'}const {error}=await sb.from('customers').delete().eq('id',c.id);if(error){const msg=document.getElementById('infoMsg');if(msg){msg.textContent=error.code==='23503'?'لا يمكن حذف عميل له فواتير أو حركات مالية. غيّر حالته إلى غير نشط بدلًا من الحذف.':'تعذر حذف العميل: '+error.message;msg.className='msg error'}if(btn){btn.disabled=false;btn.textContent='🗑️ حذف العميل'}return}closeCustomer();await loadCustomers()}
 function renderLedgerTab(c){
   const pane=document.getElementById('paneLedger');
   const entries=ledgerCache.filter(l=>l.customer_id===c.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
@@ -317,7 +318,7 @@ document.getElementById('addCustomerBtn').addEventListener('click',()=>{
     '<label>التليفون</label><input id="newPhone" type="text" placeholder="رقم التليفون (اختياري)">'+
     '<label>واتساب</label><input id="newWhatsapp" type="text" placeholder="رقم واتساب">'+
     '<label>المنطقة</label><input id="newArea" type="text" placeholder="المنطقة">'+
-    '<label>العنوان</label><input id="newAddress" type="text" placeholder="العنوان (اختياري)">'+
+    '<label>العنوان</label><input id="newAddress" type="text" placeholder="العنوان (اختياري)">'+ '<label>اللوكيشن</label><input id="newLocation" type="text" placeholder="رابط Google Maps أو وصف المكان">'+
     '<label>التصنيف</label><select id="newCategory"><option value="regular">عادي</option><option value="vip">VIP</option><option value="clinic">عيادة / شركة</option><option value="debtor">آجل</option></select>'+
     '<label>ملاحظات</label><textarea id="newNotes" rows="2"></textarea>'+
     '<label>حد الائتمان (اختياري)</label><input id="newCreditLimit" type="number" step="0.01">'+
@@ -327,12 +328,12 @@ document.getElementById('addCustomerBtn').addEventListener('click',()=>{
   document.getElementById('saveNewBtn').onclick=async()=>{
     const msg=document.getElementById('newMsg');
     const name=document.getElementById('newName').value.trim();
-    const phone=document.getElementById('newPhone').value.trim()||null;const whatsapp=document.getElementById('newWhatsapp').value.trim()||null;const area=document.getElementById('newArea').value.trim()||null;const address=document.getElementById('newAddress').value.trim()||null;const category=document.getElementById('newCategory').value||'regular';const notes=document.getElementById('newNotes').value.trim()||null;
+    const phone=document.getElementById('newPhone').value.trim()||null;const location=document.getElementById('newLocation').value.trim()||null;const whatsapp=document.getElementById('newWhatsapp').value.trim()||null;const area=document.getElementById('newArea').value.trim()||null;const address=document.getElementById('newAddress').value.trim()||null;const category=document.getElementById('newCategory').value||'regular';const notes=document.getElementById('newNotes').value.trim()||null;
     const clVal=document.getElementById('newCreditLimit').value;
     const creditLimit=clVal===''?null:parseFloat(clVal);
     if(!name){msg.textContent='اسم العميل مطلوب';msg.className='msg error';return}
     msg.textContent='جاري الحفظ...';msg.className='msg';
-    const{error}=await sb.from('customers').insert({name,phone,whatsapp,area,address,category,notes,credit_limit:creditLimit});
+    const{error}=await sb.from('customers').insert({name,phone,whatsapp,area,address,location,category,notes,credit_limit:creditLimit});
     if(error){msg.textContent='حصل خطأ: '+esc(error.message);msg.className='msg error';return}
     closeCustomer();
     await loadCustomers();
