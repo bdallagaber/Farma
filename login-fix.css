@@ -1,59 +1,69 @@
-/* Login page must remain mathematically centered in the viewport. */
+/* Stable login layout. The mobile keyboard changes the visual viewport, so the page must not be centered by a fixed 100vh flex container. */
 html, body.login-page {
   width: 100%;
   min-width: 100%;
+  margin: 0 !important;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
 }
 
 body.login-page {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  max-width: none !important;
-  margin: 0 !important;
-  padding: 20px !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  position: static !important;
+  inset: auto !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 100% !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  padding: 24px 16px !important;
 }
 
 body.login-page > .card {
-  width: min(380px, calc(100vw - 40px)) !important;
+  box-sizing: border-box;
+  display: block;
+  width: min(380px, 100%) !important;
   max-width: 380px !important;
   margin: 0 auto !important;
-  flex: 0 0 auto;
+  transform: none !important;
 }
 
-
-/* Mobile keyboard stability: avoid recentering a fixed 100vh flex layout on every viewport resize. */
-html:has(body.login-page), body.login-page {
-  overscroll-behavior: none;
-}
 body.login-page input,
 body.login-page button {
-  font-size: 16px;
+  font-size: 16px !important;
 }
+
 @media (max-width: 600px) {
   body.login-page {
-    position: relative;
-    inset: auto;
-    width: 100%;
-    min-height: 100svh;
-    height: auto;
-    max-height: none;
-    overflow-x: hidden;
-    overflow-y: auto;
-    align-items: flex-start !important;
-    justify-content: center !important;
-    padding: max(16px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom)) !important;
+    padding-top: max(20px, env(safe-area-inset-top)) !important;
+    padding-right: max(16px, env(safe-area-inset-right)) !important;
+    padding-bottom: max(24px, env(safe-area-inset-bottom)) !important;
+    padding-left: max(16px, env(safe-area-inset-left)) !important;
   }
+
   body.login-page > .card {
-    width: min(380px, 100%) !important;
-    margin: 12px auto 0 !important;
-    transform: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 auto !important;
   }
+
   body.login-page input:focus {
-    scroll-margin-top: 18px;
-    scroll-margin-bottom: 18px;
+    scroll-margin-top: 12px;
+    scroll-margin-bottom: 12px;
   }
+}
+
+/* Keep the login form from triggering browser tap/focus highlight animations. */
+body.login-page input,
+body.login-page button {
+  -webkit-tap-highlight-color: transparent;
+}
+body.login-page input:focus,
+body.login-page button:focus {
+  outline: none;
+}
+body.login-page button:focus-visible {
+  outline: 2px solid var(--primary, #1f9d73);
+  outline-offset: 2px;
 }
