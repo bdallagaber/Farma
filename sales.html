@@ -704,6 +704,12 @@ function formatStockAvailability(p, qty) {
     Number(qty) || 0
   );
 
+  /* الصنف غير القابل للتجزئة يعرض دائمًا بوحدته المتوسطة (علبة)،
+     حتى لو كانت بيانات sale_allowed_units القديمة غير متسقة. */
+  if (!p.retail_allowed && p.unit_medium) {
+    return qty + ' ' + unitLabel(p, 'medium');
+  }
+
   const mediumToSmall =
     Number(p.unit_medium_to_small) || 1;
 
@@ -1182,7 +1188,7 @@ function updateUnitOptions(forceIncludeLevel) {
   if (!p.retail_allowed) {
 
     unitSel.innerHTML =
-      '<option value="small">علبة كاملة</option>';
+      '<option value="medium">علبة كاملة</option>';
 
 
     hint.textContent =
