@@ -6,7 +6,7 @@
 <style>
 .cust-toolbar{display:flex;align-items:center;gap:8px;margin:18px 0 14px;flex-wrap:wrap}.cust-search{flex:1;min-width:230px}.cust-search input{width:100%;height:44px;margin:0}
 .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.summary-card{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:13px 15px}.summary-label{font-size:11px;color:var(--text-muted);margin-bottom:4px}.summary-value{font-size:20px;font-weight:800;color:var(--primary-dark)}.summary-value.money{font-size:21px}
-.cust-row{cursor:pointer}.cust-row:hover{background:var(--bg)}.debt-pos{color:var(--danger);font-weight:700}.debt-zero{color:var(--text-muted)}
+.cust-row{cursor:pointer;transition:background-color .16s ease,transform .16s ease}.cust-row:hover{background:var(--bg)}.cust-row:active{transform:scale(.998)}.debt-pos{color:var(--danger);font-weight:700}.debt-zero{color:var(--text-muted)}
 .cust-modal{position:fixed;inset:0;background:rgba(15,23,27,.5);display:flex;align-items:flex-start;justify-content:center;z-index:1100;padding:20px;overflow-y:auto}.cust-paper{background:#fff;border-radius:10px;padding:24px;max-width:520px;width:100%;margin-top:20px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
 .cust-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:12px;border-bottom:2px solid var(--border)}.cust-header h2{font-size:18px;color:var(--primary-dark)}.cust-close{width:32px;height:32px;border:0;background:transparent;color:var(--text-muted);font-size:22px;line-height:1;cursor:pointer;padding:0;margin:0}
 .tabs{display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid var(--border)}.tab-btn{background:transparent;color:var(--text-muted);border:0;border-radius:0;padding:9px 4px;margin:0 8px 0 0;font-size:13px;font-weight:700;cursor:pointer;border-bottom:2px solid transparent}.tab-btn.active{color:var(--primary-dark);border-bottom-color:var(--primary)}
@@ -19,7 +19,7 @@
 .followup-form{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:14px}.followup-form label{margin-top:0}
 .badge-alert{display:inline-block;width:8px;height:8px;border-radius:50%;margin-left:6px}.badge-alert.overdue{background:var(--danger)}.badge-alert.soon{background:var(--warning)}
 /* إصلاح نافذة العميل وتخطيط جدول العملاء على الهاتف */
-.cust-modal{z-index:3000!important;isolation:isolate}
+.cust-modal{z-index:3000!important;isolation:isolate}.cust-modal:not(.hidden){animation:custFadeIn .16s ease-out}.cust-modal:not(.hidden) .cust-paper{animation:custSlideIn .2s ease-out}.tab-pane.active{animation:custPaneIn .16s ease-out}@keyframes custFadeIn{from{opacity:0}to{opacity:1}}@keyframes custSlideIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}@keyframes custPaneIn{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:translateY(0)}}.tab-btn{transition:color .15s ease,border-color .15s ease}
 .cust-paper{max-height:calc(100dvh - 24px);overflow-y:auto;overscroll-behavior:contain}
 .tab-btn,.tab-btn:hover,.tab-btn:focus,.tab-btn:active{outline:none;box-shadow:none;-webkit-tap-highlight-color:transparent}
 .tab-btn.active{color:#4b5563!important;border-bottom-color:var(--primary)!important;box-shadow:none!important;background:transparent!important}.tab-btn:focus,.tab-btn:active{color:#4b5563!important;background:transparent!important;box-shadow:none!important;outline:none!important;border-bottom-color:var(--primary)!important}.tab-btn:hover{color:#4b5563!important;background:transparent!important;box-shadow:none!important;outline:none!important}.tab-btn{-webkit-tap-highlight-color:transparent}
@@ -42,12 +42,13 @@
   .tabs::-webkit-scrollbar{display:none}
   .tab-btn{flex:0 0 auto;padding:10px 6px;font-size:12px}
 }
+@media(prefers-reduced-motion:reduce){.cust-modal:not(.hidden),.cust-modal:not(.hidden) .cust-paper,.tab-pane.active{animation:none!important}.cust-row,.tab-btn{transition:none!important}}
 </style></head>
 <body class="has-sidebar">
 <header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px">خروج</button></div></header>
 <nav><a href="inventory.html">المخزون</a><a href="sales.html">المبيعات</a><a href="invoices.html">🧾 الفواتير</a><a href="customers.html" class="active">👥 العملاء</a><a href="shortages.html">النواقص</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a></nav><div id="sidebarOverlay" class="sidebar-overlay"></div>
 <div class="main-content"><div class="card"><h2>👥 العملاء</h2>
-<div class="cust-toolbar"><div class="cust-search"><input id="searchBox" type="text" placeholder="ابحث بالاسم أو التليفون أو واتساب..."></div><select id="customerFilter"><option value="all">كل العملاء</option><option value="debt">عليهم مديونية</option><option value="vip">VIP</option><option value="overdue">متابعة متأخرة</option></select><button type="button" id="addCustomerBtn">+ عميل جديد</button></div>
+<div class="cust-toolbar"><div class="cust-search"><input id="searchBox" type="text" placeholder="ابحث بالاسم أو التليفون أو واتساب..."></div><select id="customerFilter"><option value="all">كل العملاء النشطين</option><option value="inactive">العملاء المؤرشفون</option><option value="debt">عليهم مديونية</option><option value="vip">VIP</option><option value="overdue">متابعة متأخرة</option></select><button type="button" id="addCustomerBtn">+ عميل جديد</button></div>
 <div class="summary-grid"><div class="summary-card"><div class="summary-label">عدد العملاء</div><div class="summary-value" id="custCount">0</div></div><div class="summary-card"><div class="summary-label">إجمالي المديونية</div><div class="summary-value money" id="totalDebt">0.00 ج.م</div></div><div class="summary-card"><div class="summary-label">متابعات اليوم</div><div class="summary-value" id="todayFollowups">0</div></div><div class="summary-card"><div class="summary-label">أعلى مديونية</div><div class="summary-value money" id="topDebt">0.00 ج.م</div></div></div>
 <div id="customersWrap"><p class="loading">جاري التحميل...</p></div><details class="card collapsible" style="margin-top:14px"><summary><h2>📊 تقارير CRM</h2></summary><div id="crmReports"><p class="loading">جاري إعداد التقارير...</p></div></details>
 </div></div>
@@ -85,7 +86,7 @@ function reportRows(rows,fn){return rows.length?'<div>'+rows.map(r=>'<div class=
 function renderCustomers(){
   const wrap=document.getElementById('customersWrap');
   const term=document.getElementById('searchBox').value.trim().toLowerCase();
-  const filter=document.getElementById('customerFilter').value;const filtered=customersCache.filter(c=>{const hay=((c.name||'')+' '+(c.phone||'')+' '+(c.whatsapp||'')).toLowerCase();if(term&&!hay.includes(term))return false;if(filter==='debt'&&c.balance<=0)return false;if(filter==='vip'&&c.category!=='vip')return false;if(filter==='overdue'&&!followupsCache.some(f=>f.customer_id===c.id&&f.status==='open'&&f.next_followup_date<todayStr()))return false;return true});
+  const filter=document.getElementById('customerFilter').value;const filtered=customersCache.filter(c=>{if(filter==='inactive'&&c.status!=='inactive')return false;if(filter!=='inactive'&&c.status==='inactive')return false;const hay=((c.name||'')+' '+(c.phone||'')+' '+(c.whatsapp||'')).toLowerCase();if(term&&!hay.includes(term))return false;if(filter==='debt'&&c.balance<=0)return false;if(filter==='vip'&&c.category!=='vip')return false;if(filter==='overdue'&&!followupsCache.some(f=>f.customer_id===c.id&&f.status==='open'&&f.next_followup_date<todayStr()))return false;return true});
   document.getElementById('custCount').textContent=customersCache.length.toLocaleString('ar-EG');
   const totalDebt=customersCache.reduce((s,c)=>s+Math.max(c.balance,0),0);
   document.getElementById('totalDebt').textContent=totalDebt.toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م';document.getElementById('todayFollowups').textContent=followupsCache.filter(f=>f.status==='open'&&f.next_followup_date===todayStr()).length.toLocaleString('ar-EG');document.getElementById('topDebt').textContent=Math.max(0,...customersCache.map(c=>Number(c.balance||0))).toLocaleString('ar-EG',{minimumFractionDigits:2,maximumFractionDigits:2})+' ج.م';
@@ -177,7 +178,24 @@ async function saveCustomerInfo(c){
   if(updated)renderCustomerModal(updated,'info');
 }
 
-async function deleteCustomer(c){if(!confirm('هل أنت متأكد من حذف العميل «'+c.name+'»؟\nلن يتم حذف فواتيره أو حركاته المالية.'))return;const btn=document.getElementById('deleteCustomerBtn');if(btn){btn.disabled=true;btn.textContent='جاري الحذف...'}const {error}=await sb.from('customers').delete().eq('id',c.id);if(error){const msg=document.getElementById('infoMsg');if(msg){msg.textContent=error.code==='23503'?'لا يمكن حذف عميل له فواتير أو حركات مالية. غيّر حالته إلى غير نشط بدلًا من الحذف.':'تعذر حذف العميل: '+error.message;msg.className='msg error'}if(btn){btn.disabled=false;btn.textContent='🗑️ حذف العميل'}return}closeCustomer();await loadCustomers()}
+async function deleteCustomer(c){
+  if(!confirm('هل أنت متأكد من حذف العميل «'+c.name+'»؟\nإذا كان مرتبطًا بفواتير أو حركات مالية سيتم أرشفته كغير نشط للحفاظ على السجل.'))return;
+  const buttons=[...document.querySelectorAll('.customer-delete-btn')].filter(b=>b.dataset.id===c.id);
+  buttons.forEach(b=>{b.disabled=true;b.textContent='جاري الحذف...'});
+  let result=await sb.from('customers').delete().eq('id',c.id);
+  if(result.error){
+    const archive=await sb.from('customers').update({status:'inactive'}).eq('id',c.id);
+    if(archive.error){
+      buttons.forEach(b=>{b.disabled=false;b.textContent='حذف'});
+      alert('تعذر حذف أو أرشفة العميل: '+archive.error.message);
+      return;
+    }
+    alert('العميل مرتبط بسجل مالي، لذلك تم أرشفته كغير نشط بدل حذفه حفاظًا على الفواتير والحركات المالية.');
+  }
+  closeCustomer();
+  await loadCustomers();
+}
+
 function renderLedgerTab(c){
   const pane=document.getElementById('paneLedger');
   const entries=ledgerCache.filter(l=>l.customer_id===c.id).sort((a,b)=>new Date(b.created_at)-new Date(a.created_at));
