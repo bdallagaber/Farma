@@ -1,0 +1,13 @@
+import { useEffect, useRef, useState } from 'react'
+import { BrowserMultiFormatReader } from '@zxing/browser'
+
+const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'qr_code']
+export default function BarcodeScanner({ onDetected, onClose }) {
+  const videoRef = useRef(null); const streamRef = useRef(null); const readerRef = useRef(null); const frameRef = useRef(null); const detectedRef = useRef(false); const [status, setStatus] = useState('جاري تشغيل الكاميرا...'); const [error, setError] = useState('')
+  useEffect(() => { let active = true
+    async function start() { try { const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false }); if (!active) return stream.getTracks().forEach(track => track.stop()); streamRef.current = stream; videoRef.current.srcObject = stream; await videoRef.current.play(); if ('BarcodeDetector' in window) { const detector = new window.BarcodeDetector({ formats }); setStatus('وجّه الكاميرا إلى الباركود...'); const scan = async () => { if (!active || detectedRef.current) return; try { const codes = await detector.detect(videoRef.current); if (codes[0]?.rawValue) { detectedRef.current = true; onDetected(codes[0].rawValue) } } catch { /* camera frame may be unavailable briefly */ } frameRef.current = requestAnimationFrame(scan) }; frameRef.current = requestAnimationFrame(scan) } else { setStatus('جاري تشغيل قارئ الباركود...'); const reader = new BrowserMultiFormatReader(); readerRef.current = reader; reader.decodeFromStream(stream, videoRef.current, (result) => { if (result?.getText() && !detectedRef.current) { detectedRef.current = true; onDetected(result.getText()) } }).catch(() => setError('لم يتمكن المتصفح من تشغيل قارئ الباركود.')) } } catch (err) { setError(err.name === 'NotAllowedError' ? 'اسمح للموقع باستخدام الكاميرا من إعدادات المتصفح.' : 'تعذر تشغيل الكاميرا. تأكد أن الصفحة تعمل عبر HTTPS.') } }
+    start()
+    return () => { active = false; if (frameRef.current) cancelAnimationFrame(frameRef.current); readerRef.current?.reset(); streamRef.current?.getTracks().forEach(track => track.stop()); if (videoRef.current) videoRef.current.srcObject = null }
+  }, [onDetected])
+  return <div className="scanner-overlay"><div className="scanner-modal"><button className="scanner-close" onClick={onClose} aria-label="إغلاق">×</button><h3>مسح الباركود</h3><div className="scanner-view"><video ref={videoRef} muted playsInline /></div><p className={error ? 'error-text' : 'scanner-status'}>{error || status}</p>{error && <button className="secondary-button" onClick={onClose}>إغلاق</button>}</div></div>
+}
