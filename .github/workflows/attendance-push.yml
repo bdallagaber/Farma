@@ -1,0 +1,20 @@
+name: Attendance push reminders
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  send-reminders:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger attendance reminders
+        env:
+          CRON_SECRET: ${{ secrets.ATTENDANCE_PUSH_CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -H "content-type: application/json" \
+            "https://xnppuzullfyxeqwxhyts.supabase.co/functions/v1/attendance-push-reminders"
