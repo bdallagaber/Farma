@@ -7,31 +7,35 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const cairoDate = () => new Intl.DateTimeFormat("en-CA", { timeZone: TZ, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
 function addDays(dateStr: string, days: number) { const [y, m, d] = dateStr.split("-").map(Number); const date = new Date(Date.UTC(y, m - 1, d)); date.setUTCDate(date.getUTCDate() + days); return date.toISOString().slice(0, 10); }
 
-async function pushToUser(userId: string, notification: any, config: any) {
-  const { data: subscriptions } = await supabase.from("attendance_push_subscriptions").select("id, endpoint, p256dh, auth").eq("user_id", userId).limit(50);
-  let sent = 0;
+type Candidate = { user_id: string; type: string; title: string; body: string; link: string; entity_id?: string | null; dedupe_key: string };
+
+async function sendPushes(notifications: any[], config: any) {
+  if (!notifications.length) return { pushed: 0 };
+  const userIds = [...new Set(notifications.map((n) => n.user_id))];
+  const { data: subscriptions } = await supabase.from("attendance_push_subscriptions").select("id, user_id, endpoint, p256dh, auth").in("user_id", userIds).limit(5000);
+  const byUser = new Map<string, any[]>();
+  for (const subscription of subscriptions || []) byUser.set(subscription.user_id, [...(byUser.get(subscription.user_id) || []), subscription]);
+  const sentIds: string[] = [];
   const stale: string[] = [];
-  for (const subscription of subscriptions || []) {
-    try {
-      await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: notification.title, body: notification.body, tag: `farma-${notification.type}-${notification.id}`, data: { url: notification.link, notification_id: notification.id } }));
-      sent += 1;
-    } catch (error) {
-      const statusCode = Number((error as any)?.statusCode || 0);
-      if (statusCode === 404 || statusCode === 410) stale.push(subscription.id);
-    }
+  let pushed = 0;
+  for (const notification of notifications) {
+    const userSubscriptions = byUser.get(notification.user_id) || [];
+    const results = await Promise.allSettled(userSubscriptions.map(async (subscription) => {
+      try {
+        await webpush.sendNotification({ endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } }, JSON.stringify({ title: notification.title, body: notification.body, tag: `farma-${notification.type}-${notification.id}`, data: { url: notification.link, notification_id: notification.id } }));
+        return true;
+      } catch (error) {
+        const statusCode = Number((error as any)?.statusCode || 0);
+        if (statusCode === 404 || statusCode === 410) stale.push(subscription.id);
+        return false;
+      }
+    }));
+    const sent = results.some((result) => result.status === "fulfilled" && result.value === true);
+    if (sent) { pushed += 1; sentIds.push(notification.id); }
   }
   if (stale.length) await supabase.from("attendance_push_subscriptions").delete().in("id", stale);
-  if (sent > 0) await supabase.from("app_notifications").update({ push_sent_at: new Date().toISOString() }).eq("id", notification.id);
-  return sent;
-}
-
-async function createAndSend(input: { userId: string; type: string; title: string; body: string; link: string; entityId?: string | null; dedupeKey: string }, config: any) {
-  const { data: notification, error } = await supabase.from("app_notifications").insert({ user_id: input.userId, type: input.type, title: input.title, body: input.body, link: input.link, entity_id: input.entityId || null, dedupe_key: input.dedupeKey }).select("id, title, body, link, type").single();
-  if (error) {
-    if (String(error.code) === "23505") return { created: false, sent: 0 };
-    throw error;
-  }
-  return { created: true, sent: await pushToUser(input.userId, notification, config) };
+  if (sentIds.length) await supabase.from("app_notifications").update({ push_sent_at: new Date().toISOString() }).in("id", sentIds);
+  return { pushed };
 }
 
 Deno.serve(async (req) => {
@@ -43,60 +47,41 @@ Deno.serve(async (req) => {
 
   const today = cairoDate();
   const expiryLimit = addDays(today, 30);
-  const [{ data: admins, error: adminError }, { data: employees, error: employeeError }] = await Promise.all([
+  const [{ data: admins, error: adminError }, { data: pendingRequests, error: pendingError }, { data: decidedRequests, error: decidedError }, { data: stockRows, error: stockError }, { data: expiringProducts, error: expiryError }] = await Promise.all([
     supabase.from("profiles").select("id, full_name").eq("role", "admin").limit(100),
-    supabase.from("profiles").select("id, full_name").eq("role", "employee").limit(500),
+    supabase.from("attendance_requests").select("id, employee_id, request_type, start_date, created_at, profiles:employee_id(full_name)").eq("status", "pending").order("created_at", { ascending: false }).limit(500),
+    supabase.from("attendance_requests").select("id, employee_id, request_type, start_date, status, updated_at").in("status", ["approved", "rejected"]).order("updated_at", { ascending: false }).limit(500),
+    supabase.from("inventory").select("product_id, quantity_smallest_unit, products:product_id(id, name, min_stock_threshold)").limit(2000),
+    supabase.from("products").select("id, name, expiry_date").not("expiry_date", "is", null).gte("expiry_date", today).lte("expiry_date", expiryLimit).limit(2000),
   ]);
-  if (adminError || employeeError) return json({ error: adminError?.message || employeeError?.message }, 500);
-
-  let created = 0;
-  let pushed = 0;
-  const results: any[] = [];
+  const queryError = adminError || pendingError || decidedError || stockError || expiryError;
+  if (queryError) return json({ error: queryError.message }, 500);
   const adminList = admins || [];
-  const employeeList = employees || [];
+  const candidates: Candidate[] = [];
+  const addForAdmins = (base: Omit<Candidate, "user_id">) => { for (const admin of adminList) candidates.push({ ...base, user_id: admin.id, dedupe_key: `${base.dedupe_key}_${admin.id}` }); };
 
-  const { data: pendingRequests } = await supabase.from("attendance_requests").select("id, employee_id, request_type, request_other, start_date, created_at, profiles:employee_id(full_name)").eq("status", "pending").order("created_at", { ascending: false }).limit(500);
   for (const request of pendingRequests || []) {
     const employeeName = request.profiles?.full_name || "موظف";
-    for (const admin of adminList) {
-      const result = await createAndSend({ userId: admin.id, type: "request_pending", title: "طلب موظف جديد", body: `${employeeName} أرسل طلبًا جديدًا للمراجعة.`, link: `/attendance.html?notification=request-${request.id}`, entityId: request.id, dedupeKey: `request_pending_${request.id}_${admin.id}` }, config);
-      if (result.created) { created += 1; pushed += result.sent; results.push({ type: "request_pending", user: admin.id, sent: result.sent }); }
-    }
+    addForAdmins({ type: "request_pending", title: "طلب موظف جديد", body: `${employeeName} أرسل طلبًا جديدًا للمراجعة.`, link: `/attendance.html?notification=request-${request.id}`, entity_id: request.id, dedupe_key: `request_pending_${request.id}` });
   }
+  const typeText: Record<string, string> = { leave: "طلب الإجازة", late_permission: "طلب إذن التأخير", early_leave: "طلب الانصراف المبكر", other: "الطلب" };
+  for (const request of decidedRequests || []) candidates.push({ user_id: request.employee_id, type: "request_decision", title: "تحديث على طلبك", body: `${request.status === "approved" ? "تم قبول" : "تم رفض"} ${typeText[request.request_type] || "الخاص بك"}.`, link: `/attendance.html?notification=request-${request.id}`, entity_id: request.id, dedupe_key: `request_decision_${request.id}_${request.status}` });
 
-  const { data: decidedRequests } = await supabase.from("attendance_requests").select("id, employee_id, request_type, start_date, status, admin_note, updated_at").in("status", ["approved", "rejected"]).order("updated_at", { ascending: false }).limit(500);
-  for (const request of decidedRequests || []) {
-    const statusText = request.status === "approved" ? "تم قبول" : "تم رفض";
-    const typeText: Record<string, string> = { leave: "طلب الإجازة", late_permission: "طلب إذن التأخير", early_leave: "طلب الانصراف المبكر", other: "الطلب" };
-    const result = await createAndSend({ userId: request.employee_id, type: "request_decision", title: "تحديث على طلبك", body: `${statusText} ${typeText[request.request_type] || "الخاص بك"}.`, link: `/attendance.html?notification=request-${request.id}`, entityId: request.id, dedupeKey: `request_decision_${request.id}_${request.status}` }, config);
-    if (result.created) { created += 1; pushed += result.sent; results.push({ type: "request_decision", user: request.employee_id, sent: result.sent }); }
-  }
-
-  const { data: stockRows } = await supabase.from("inventory").select("product_id, quantity_smallest_unit, products:product_id(id, name, min_stock_threshold)").limit(2000);
   for (const row of stockRows || []) {
-    const product = row.products;
-    if (!product) continue;
-    const quantity = Number(row.quantity_smallest_unit || 0);
-    const threshold = Number(product.min_stock_threshold || 0);
-    let type = "";
-    let title = "";
-    let body = "";
-    if (quantity <= 0) { type = "stock_out"; title = "صنف نفد من المخزون"; body = `الصنف ${product.name} انتهى من المخزون.`; }
-    else if (threshold > 0 && quantity <= threshold) { type = "stock_low"; title = "صنف أوشك على النفاذ"; body = `الصنف ${product.name} وصل إلى ${quantity} وحدة، أقل من الحد الأدنى.`; }
-    if (!type) continue;
-    for (const admin of adminList) {
-      const result = await createAndSend({ userId: admin.id, type, title, body, link: `/inventory.html?notification=stock-${product.id}`, entityId: product.id, dedupeKey: `${type}_${product.id}_${today}_${admin.id}` }, config);
-      if (result.created) { created += 1; pushed += result.sent; results.push({ type, user: admin.id, sent: result.sent }); }
-    }
+    const product = row.products; if (!product) continue;
+    const quantity = Number(row.quantity_smallest_unit || 0); const threshold = Number(product.min_stock_threshold || 0);
+    if (quantity <= 0) addForAdmins({ type: "stock_out", title: "صنف نفد من المخزون", body: `الصنف ${product.name} انتهى من المخزون.`, link: `/inventory.html?notification=stock-${product.id}`, entity_id: product.id, dedupe_key: `stock_out_${product.id}_${today}` });
+    else if (threshold > 0 && quantity <= threshold) addForAdmins({ type: "stock_low", title: "صنف أوشك على النفاذ", body: `الصنف ${product.name} وصل إلى ${quantity} وحدة، أقل من الحد الأدنى.`, link: `/inventory.html?notification=stock-${product.id}`, entity_id: product.id, dedupe_key: `stock_low_${product.id}_${today}` });
   }
+  for (const product of expiringProducts || []) addForAdmins({ type: "expiry_near", title: "صلاحية صنف قريبة", body: `الصنف ${product.name} تنتهي صلاحيته في ${product.expiry_date}.`, link: `/inventory.html?notification=expiry-${product.id}`, entity_id: product.id, dedupe_key: `expiry_near_${product.id}_${product.expiry_date}` });
 
-  const { data: expiringProducts } = await supabase.from("products").select("id, name, expiry_date").not("expiry_date", "is", null).gte("expiry_date", today).lte("expiry_date", expiryLimit).limit(2000);
-  for (const product of expiringProducts || []) {
-    for (const admin of adminList) {
-      const result = await createAndSend({ userId: admin.id, type: "expiry_near", title: "صلاحية صنف قريبة", body: `الصنف ${product.name} تنتهي صلاحيته في ${product.expiry_date}.`, link: `/inventory.html?notification=expiry-${product.id}`, entityId: product.id, dedupeKey: `expiry_near_${product.id}_${product.expiry_date}_${admin.id}` }, config);
-      if (result.created) { created += 1; pushed += result.sent; results.push({ type: "expiry_near", user: admin.id, sent: result.sent }); }
-    }
+  const unique = [...new Map(candidates.map((candidate) => [candidate.dedupe_key + "_" + candidate.user_id, candidate])).values()];
+  let inserted: any[] = [];
+  if (unique.length) {
+    const { data, error } = await supabase.from("app_notifications").upsert(unique, { onConflict: "dedupe_key", ignoreDuplicates: true }).select("id, user_id, type, title, body, link");
+    if (error) return json({ error: error.message }, 500);
+    inserted = data || [];
   }
-
-  return json({ ok: true, checked_at: new Date().toISOString(), created, pushed, results });
+  const { pushed } = await sendPushes(inserted, config);
+  return json({ ok: true, checked_at: new Date().toISOString(), candidates: unique.length, created: inserted.length, pushed });
 });
