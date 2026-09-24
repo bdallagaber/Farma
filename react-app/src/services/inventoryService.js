@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase'
 export async function loadInventoryPage({ page = 0, pageSize = 200, search = '' } = {}) {
   let productsQuery = supabase
     .from('products')
-    .select('id,name,expiry_date,min_stock_threshold,default_sale_price', { count: 'exact' })
+    .select('id,name,expiry_date,min_stock_threshold,default_sale_price,unit_large,unit_large_to_medium,unit_medium_to_small,unit_medium,unit_small,qr_code', { count: 'exact' })
     .order('name')
     .range(page * pageSize, (page + 1) * pageSize - 1)
 

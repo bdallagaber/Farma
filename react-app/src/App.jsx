@@ -14,5 +14,5 @@ export default function App() {
   if (checking) return <div className="loading-screen">جاري تحميل Farma...</div>
   if (!session) return <LoginForm onLoggedIn={setSession} />
   if (!profile) return <div className="loading-screen">جاري تحميل بيانات المستخدم...</div>
-  return <div className="app-shell"><Sidebar /><div className="main-area"><Topbar profile={profile} /><InventoryPage userId={session.user.id} /></div></div>
+  return <div className="app-shell"><Sidebar /><div className="main-area"><Topbar profile={profile} /><InventoryPage userId={session.user.id} isAdmin={profile.role === 'admin'} /></div></div>
 }

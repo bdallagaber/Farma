@@ -38,3 +38,4 @@ export async function saveProduct(form, userId, editingId = null) {
 
 function getQuantity(form, perBox) { return (Number(form.boxesQuantity) || 0) * perBox + (Number(form.leftoverMedium) || 0) * (Number(form.mediumToSmall) || 1) + (Number(form.leftoverSmall) || 0) }
 export async function updateQuantity(productId, boxes, perBox) { const { error } = await supabase.from('inventory').update({ quantity_smallest_unit: Number(boxes) * Number(perBox) }).eq('product_id', productId); if (error) throw error }
+export async function deleteProduct(productId) { const { error } = await supabase.from('products').delete().eq('id', productId); if (error) throw error }
