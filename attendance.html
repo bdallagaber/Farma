@@ -105,8 +105,8 @@ async function loadToday(){const d=today();const y=addDays(d,-1);
   const data=openRow||todayRow;
   if(!data){$('todayStatus').textContent='لم يسجل';$('checkInText').textContent='—';$('checkOutText').textContent='—';$('workText').textContent='—';$('checkInBtn').disabled=false;$('checkOutBtn').disabled=true;return}
   $('todayStatus').innerHTML='<span class="status '+esc(data.status)+'">'+esc(statusText(data.status))+'</span>';$('checkInText').textContent=fmtTime(data.check_in);$('checkOutText').textContent=fmtTime(data.check_out);$('workText').textContent=data.work_minutes!=null?minsText(data.work_minutes):'—';
-  // زرار الحضور يتقفل لو النهاردة فيه سجل حضور بالفعل (منعًا لتسجيل حضورين نفس اليوم).
-  $('checkInBtn').disabled=!!(todayRow&&todayRow.check_in);
+  // زرار الحضور يتقفل لو فيه سجل حضور اليوم أو شيفت مفتوح من الليلة السابقة.
+  $('checkInBtn').disabled=!!(todayRow&&todayRow.check_in)||!!openRow;
   $('checkOutBtn').disabled=!data.check_in||!!data.check_out}
 function getLocation(){return new Promise((resolve,reject)=>{if(!navigator.geolocation)return reject(new Error('المتصفح لا يدعم تحديد الموقع'));navigator.geolocation.getCurrentPosition(p=>resolve({lat:p.coords.latitude,lng:p.coords.longitude,accuracy:p.coords.accuracy}),e=>reject(new Error(e.code===1?'اسمح للموقع من إعدادات المتصفح':e.message)),{enableHighAccuracy:true,timeout:15000,maximumAge:0})})}
 async function record(action){const btn=action==='check_in'?$('checkInBtn'):$('checkOutBtn');btn.disabled=true;$('locationMsg').textContent='جاري تحديد موقعك والتحقق من أنك داخل نطاق الصيدلية...';try{const p=await getLocation();const {data,error}=await sb.rpc('record_attendance',{p_action:action,p_lat:p.lat,p_lng:p.lng,p_accuracy:p.accuracy});if(error)throw error;$('locationMsg').textContent='تم التسجيل بنجاح ✅ المسافة عن الصيدلية: '+Math.round(Number(data.distance||0))+' متر';await loadToday()}catch(e){$('locationMsg').textContent='❌ '+(e.message||'تعذر تسجيل العملية');btn.disabled=false;await loadToday()}}
