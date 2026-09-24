@@ -4,6 +4,7 @@ import LoginForm from './components/auth/LoginForm'
 import Sidebar from './components/layout/Sidebar'
 import Topbar from './components/layout/Topbar'
 import InventoryPage from './pages/InventoryPage'
+import SalesPage from './pages/SalesPage'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -14,5 +15,6 @@ export default function App() {
   if (checking) return <div className="loading-screen">جاري تحميل Farma...</div>
   if (!session) return <LoginForm onLoggedIn={setSession} />
   if (!profile) return <div className="loading-screen">جاري تحميل بيانات المستخدم...</div>
-  return <div className="app-shell"><Sidebar /><div className="main-area"><Topbar profile={profile} /><InventoryPage userId={session.user.id} isAdmin={profile.role === 'admin'} /></div></div>
+  const isSalesPreview = window.location.pathname.endsWith('/sales')
+  return <div className="app-shell"><Sidebar /><div className="main-area"><Topbar profile={profile} />{isSalesPreview ? <SalesPage /> : <InventoryPage userId={session.user.id} isAdmin={profile.role === 'admin'} />}</div></div>
 }
