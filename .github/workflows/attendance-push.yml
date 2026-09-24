@@ -18,3 +18,12 @@ jobs:
             -H "x-cron-secret: ${CRON_SECRET}" \
             -H "content-type: application/json" \
             "https://xnppuzullfyxeqwxhyts.supabase.co/functions/v1/attendance-push-reminders"
+      - name: Trigger general notifications
+        env:
+          CRON_SECRET: ${{ secrets.ATTENDANCE_PUSH_CRON_SECRET }}
+        run: |
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "x-cron-secret: ${CRON_SECRET}" \
+            -H "content-type: application/json" \
+            "https://xnppuzullfyxeqwxhyts.supabase.co/functions/v1/app-notifications"

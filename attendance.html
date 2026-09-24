@@ -12,7 +12,7 @@ details.card{padding:0;overflow:hidden}details.card>summary{cursor:pointer;list-
 </style>
 </head>
 <body class="has-sidebar">
-<header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div class="headerbar"><span class="userinfo" id="userinfo"></span><div class="notif-wrap"><button id="notifBtn" class="notif-btn" type="button">🔔<span id="notifBadge" class="notif-badge hidden">0</span></button><div id="notifPanel" class="notif-panel hidden"><div class="notif-head"><span>الإشعارات</span></div><div id="notifList"></div></div></div><button id="logoutBtn">خروج</button></div></header>
+<header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div class="headerbar"><span class="userinfo" id="userinfo"></span><button id="logoutBtn">خروج</button></div></header>
 <nav><a href="inventory.html">المخزون</a><a href="sales.html">المبيعات</a><a href="invoices.html">🧾 الفواتير</a><a href="customers.html">👥 العملاء</a><a href="attendance.html" class="active">🕘 الحضور</a><a href="shortages.html">النواقص</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a></nav>
 <div id="sidebarOverlay" class="sidebar-overlay"></div>
 <div class="main-content"><div id="app">
@@ -43,7 +43,7 @@ details.card{padding:0;overflow:hidden}details.card>summary{cursor:pointer;list-
 <div id="editRequestModal" class="modal"><div class="modal-box"><h3>تعديل الطلب</h3><label>نوع الطلب</label><select id="editReqType"><option value="leave">🏖️ إجازة</option><option value="late_permission">🕐 إذن تأخير</option><option value="early_leave">🚪 إذن انصراف مبكر</option><option value="other">📝 أخرى</option></select><div class="two"><div><label>من تاريخ</label><input id="editReqStart" type="date"></div><div id="editReqEndWrap"><label>إلى تاريخ</label><input id="editReqEnd" type="date"></div></div><div id="editReqTimeWrap"><label>الوقت</label><input id="editReqTime" type="time"></div><label>السبب</label><textarea id="editReqReason" rows="3"></textarea><label>الحالة</label><select id="editReqStatus"><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select><input type="hidden" id="editReqId"><div class="form-actions"><button id="saveEditReq" class="ok">حفظ</button><button id="closeEditReq" class="secondary">إلغاء</button></div><div id="editReqMsg" class="msg"></div></div></div>
 <script src="config.js"></script><script>
 let auth=null,isAdmin=false,selectedRequest=null,employees=[],shifts=[],schedules=[];
-let myRequestsData=[],allAdminRequests=[],lastReportRows=[],reportLoading=false,notifOpen=false;
+let myRequestsData=[],allAdminRequests=[],lastReportRows=[],reportLoading=false;
 const days=['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت'];
 const $=id=>document.getElementById(id);
 function esc(v){const d=document.createElement('div');d.textContent=v??'';return d.innerHTML}
@@ -74,24 +74,6 @@ setInterval(async()=>{try{if(isAdmin){await loadAdminRequests()}else{await loadM
 
 $('logoutBtn').onclick=async()=>{await sb.auth.signOut();location.href='index.html'};
 $('refreshBtn').onclick=async()=>{await loadToday();if(!isAdmin)await loadMyRequests();else await loadAdminRequests()};
-
-/* ---------- إشعارات ---------- */
-function getSeenIds(){try{return new Set(JSON.parse(localStorage.getItem('att_seen_'+(auth?.user?.id||''))||'[]'))}catch(e){return new Set()}}
-function markAllSeen(){if(isAdmin||!auth)return;const ids=myRequestsData.filter(r=>r.status!=='pending').map(r=>r.id);localStorage.setItem('att_seen_'+auth.user.id,JSON.stringify(ids))}
-function updateNotifBadge(){let count=0;if(isAdmin){count=allAdminRequests.filter(r=>r.status==='pending').length}else{const seen=getSeenIds();count=myRequestsData.filter(r=>r.status!=='pending'&&!seen.has(r.id)).length}$('notifBadge').textContent=count;$('notifBadge').classList.toggle('hidden',count===0)}
-function renderNotifications(){
-  if(isAdmin){
-    const pending=allAdminRequests.filter(r=>r.status==='pending');
-    $('notifList').innerHTML=pending.length?pending.slice(0,15).map(r=>'<div class="notif-item clickable" data-id="'+r.id+'"><strong>'+esc(r.employee?.full_name||'موظف')+'</strong> — '+esc(requestTypeText(r.request_type))+'<div class="mini">'+dateText(r.start_date)+'</div></div>').join(''):'<div class="empty">لا توجد طلبات جديدة.</div>';
-  }else{
-    const decided=myRequestsData.filter(r=>r.status!=='pending').slice(0,15);
-    $('notifList').innerHTML=decided.length?decided.map(r=>'<div class="notif-item"><strong>'+esc(requestTypeText(r.request_type))+'</strong> — <span class="status '+esc(r.status)+'">'+esc({approved:'مقبول',rejected:'مرفوض'}[r.status]||r.status)+'</span><div class="mini">'+dateText(r.start_date)+'</div></div>').join(''):'<div class="empty">لا توجد إشعارات.</div>';
-    markAllSeen();updateNotifBadge();
-  }
-}
-$('notifBtn').onclick=e=>{e.stopPropagation();notifOpen=!notifOpen;$('notifPanel').classList.toggle('hidden',!notifOpen);if(notifOpen)renderNotifications()};
-document.addEventListener('click',e=>{if(notifOpen&&!e.target.closest('.notif-wrap')){notifOpen=false;$('notifPanel').classList.add('hidden')}});
-$('notifList').addEventListener('click',e=>{if(!isAdmin)return;const item=e.target.closest('.notif-item');if(item){notifOpen=false;$('notifPanel').classList.add('hidden');openDecision(item.dataset.id)}});
 
 /* ---------- حضور الموظف ---------- */
 async function loadToday(){const d=today();const y=addDays(d,-1);
