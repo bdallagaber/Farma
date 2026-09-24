@@ -6,6 +6,27 @@ React is currently a **parallel migration**, not a replacement for the legacy sy
 
 ## Coverage matrix
 
+## Shared interaction requirements
+
+Every migrated section must include the shared notification bell and in-system notification panel. Notifications are not limited to attendance: the common layer must support request events, stock/expiry alerts, sales/invoice events, customer/CRM events, purchase-order events, and system messages. The same notification behavior must be available to the relevant employee or administrator on every section, with the sound preference handled centrally.
+
+Filtering is also a section-level requirement, not an optional enhancement. The target interaction matrix is:
+
+| Section | Normal search | Barcode search/scan | Filters | Notifications |
+|---|---:|---:|---:|---:|
+| Drug search | Yes | Yes | Yes: availability, type, shape, classification | Yes |
+| Inventory | Yes | Yes | Yes: stock state, expiry, supplier, type/classification, unit and price where applicable | Yes |
+| Sales | Yes | Yes | Yes: product/unit, stock availability, sale history/date, customer and sale type where applicable | Yes |
+| Invoices | Yes | No camera required | Yes: date, payment status, customer, total, invoice state | Yes |
+| Customers/CRM | Yes | No | Yes: category, status, balance/credit, last purchase, follow-up state and area | Yes |
+| Shortages | Yes | No camera required | Yes: supplier, date range, stock severity, sort order, expiry state | Yes |
+| Purchase orders/history | Yes | No camera required | Yes: supplier, status, date range and order state | Yes |
+| Attendance | Yes where applicable | No | Yes: employee, date, shift, request/status and attendance state | Yes |
+| Expenses and reports | Yes where applicable | No | Yes: date range, category, employee and payment/report dimensions | Yes |
+| Users/settings | Yes where applicable | No | Yes: role, status and page permissions | Yes |
+
+The legacy pages already contain several of these controls in different implementations. During React migration they should be moved into reusable filter components and service query parameters rather than copied as page-specific ad-hoc logic.
+
 | Area | Legacy coverage | React status | Next work |
 |---|---|---|---|
 | Authentication and profile | Login, session, roles, allowed pages | Basic session/profile loading is present | Centralize route guards and allowed-page enforcement |
