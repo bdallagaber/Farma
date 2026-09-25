@@ -14,6 +14,7 @@ export async function loadCustomerWorkspace() {
 export async function createCustomer(payload) { const { data, error } = await supabase.from('customers').insert(payload).select('id,name,phone,whatsapp,area,address,location,notes,category,status,credit_limit,created_at').single(); if (error) throw error; return data }
 export async function updateCustomer(id, payload) { const { data, error } = await supabase.from('customers').update(payload).eq('id', id).select('id,name,phone,whatsapp,area,address,location,notes,category,status,credit_limit,created_at').single(); if (error) throw error; return data }
 export async function addFollowup(payload) { const { error } = await supabase.from('customer_followups').insert(payload); if (error) throw error }
+export async function archiveCustomer(id) { const { error } = await supabase.from('customers').update({ status: 'inactive' }).eq('id', id); if (error) throw error }
 export async function addCustomerPayment({ customerId, saleGroupId, amount, note, userId, invoice }) {
   const { error } = await supabase.from('customer_ledger').insert({ customer_id: customerId, sale_group_id: saleGroupId || null, amount: -amount, entry_type: 'payment', note: note || (saleGroupId ? `دفعة على فاتورة #${invoice?.invoice_number || ''}` : 'دفعة من العميل'), created_by: userId })
   if (error) throw error
