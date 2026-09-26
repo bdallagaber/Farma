@@ -30,13 +30,13 @@ The legacy pages already contain several of these controls in different implemen
 | Area | Legacy coverage | React status | Next work |
 |---|---|---|---|
 | Authentication and profile | Login, session, roles, allowed pages | Basic session/profile loading is present | Centralize route guards and allowed-page enforcement |
-| Inventory products | Add, edit, delete, quick quantity, Excel, QR/manual barcode, options | Core operations, admin purchase cost, Excel preview/export, filters, camera scanning and extra barcodes are present | Duplicate detection and final legacy parity review |
+| Inventory products | Add, edit, delete, quick quantity, Excel, QR/manual barcode, options | Core operations, admin purchase cost, Excel preview/export, filters, camera scanning, extra barcodes and duplicate checks are present | Final production acceptance test |
 | Purchase cost | `product_costs`, admin-only purchase price | React form, inventory display, import/export and admin-only write are present | Add cost history UI if required by legacy parity |
 | Purchase orders | `purchase_orders`, `purchase_order_items`, create/receive/cancel/delete RPCs | React creation, order history, receive/cancel/delete actions are present | Final permission and legacy parity review |
 | Sales | `sales`, `create_sale_transaction`, customer/credit rules, barcode scanning | Missing | Highest priority after inventory because it changes stock and accounting |
 | Invoices | `invoices`, invoice details, audit log, CRM link | Missing | Move after sales transaction flow |
 | Customers and CRM | Customers, ledger, credit status, follow-ups, CRM reports | Missing | Move with sales and invoices to preserve credit/ledger behavior |
-| Shortages and expiry | Low stock, expiry reports, export/filtering | React read-only report with five-month expiry rule and filters is present | Export parity and final legacy comparison |
+| Shortages and expiry | Low stock, expiry reports, export/filtering | React report with five-month expiry rule, filters, CSV export and print is present | Final production acceptance test |
 | Order history | Purchase order history and status actions | React order history and status actions are present | Final legacy comparison |
 | Attendance | Requests, shifts, reports, audit, push notifications | Legacy only; push backend exists | Move after sales/inventory parity |
 | Expenses | Add/edit/list and totals | Missing | Move after core pharmacy operations |
