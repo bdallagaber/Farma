@@ -30,21 +30,21 @@ The legacy pages already contain several of these controls in different implemen
 | Area | Legacy coverage | React status | Next work |
 |---|---|---|---|
 | Authentication and profile | Login, session, roles, allowed pages | Basic session/profile loading is present | Centralize route guards and allowed-page enforcement |
-| Inventory products | Add, edit, delete, quick quantity, Excel, QR/manual barcode, options | Partial; core product operations and Excel preview/approval are present | Purchase cost, suppliers/options, camera scanning, duplicate detection, full filters |
-| Purchase cost | `product_costs`, admin-only purchase price | Missing from React product form and export parity | Add admin-only cost service/UI and permissions |
-| Purchase orders | `purchase_orders`, `purchase_order_items`, create/receive/cancel/delete RPCs | Missing | Move as a complete transactional module with order history |
+| Inventory products | Add, edit, delete, quick quantity, Excel, QR/manual barcode, options | Core operations, admin purchase cost, Excel preview/export, filters, camera scanning and extra barcodes are present | Duplicate detection and final legacy parity review |
+| Purchase cost | `product_costs`, admin-only purchase price | React form, inventory display, import/export and admin-only write are present | Add cost history UI if required by legacy parity |
+| Purchase orders | `purchase_orders`, `purchase_order_items`, create/receive/cancel/delete RPCs | React creation, order history, receive/cancel/delete actions are present | Final permission and legacy parity review |
 | Sales | `sales`, `create_sale_transaction`, customer/credit rules, barcode scanning | Missing | Highest priority after inventory because it changes stock and accounting |
 | Invoices | `invoices`, invoice details, audit log, CRM link | Missing | Move after sales transaction flow |
 | Customers and CRM | Customers, ledger, credit status, follow-ups, CRM reports | Missing | Move with sales and invoices to preserve credit/ledger behavior |
-| Shortages and expiry | Low stock, expiry reports, export/filtering | Legacy only | Move as read-only reports first |
-| Order history | Purchase order history and status actions | Missing | Move with purchase orders |
+| Shortages and expiry | Low stock, expiry reports, export/filtering | React read-only report with five-month expiry rule and filters is present | Export parity and final legacy comparison |
+| Order history | Purchase order history and status actions | React order history and status actions are present | Final legacy comparison |
 | Attendance | Requests, shifts, reports, audit, push notifications | Legacy only; push backend exists | Move after sales/inventory parity |
 | Expenses | Add/edit/list and totals | Missing | Move after core pharmacy operations |
 | Profit and reports | Sales/profit calculations and filters | Missing | Move after sales, invoices, expenses |
 | Users and permissions | User management, roles, page permissions | Missing | Move before exposing all React routes |
 | Search | Product search and barcode search | Missing | Build shared search service used by sales and inventory |
 | Camera barcode scanner | Native BarcodeDetector + ZXing fallback in legacy | Missing in React | Build reusable `BarcodeScanner` component |
-| Notifications | Legacy global notification script and backend | React bell/sound exists | Connect all React events after modules move |
+| Notifications | Legacy global notification script and backend | React bell/sound plus database alerts for low/out-of-stock and five-month expiry are present | Final event coverage review |
 | Versions | Legacy versions page | Missing | Low priority |
 
 ## Supabase operations found in legacy code

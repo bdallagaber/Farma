@@ -1,6 +1,6 @@
 import { supabase } from '../lib/supabase'
 
-export async function saveProduct(form, userId, editingId = null) {
+export async function saveProduct(form, userId, editingId = null, isAdmin = false) {
   const retailAllowed = form.retailAllowed
   const hasStrip = retailAllowed && form.hasStrip
   const largeToMedium = retailAllowed ? Math.max(1, Number(form.largeToMedium) || 1) : null
@@ -33,6 +33,8 @@ export async function saveProduct(form, userId, editingId = null) {
     const { error: inventoryError } = await supabase.from('inventory').insert({ product_id: productId, quantity_smallest_unit: getQuantity(form, perBox) })
     if (inventoryError) { await supabase.from('products').delete().eq('id', productId); throw inventoryError }
   }
+  if (isAdmin && form.purchasePrice !== '') { const { error: costError } = await supabase.from('product_costs').upsert({ product_id: productId, purchase_price: Number(form.purchasePrice), updated_by: userId, updated_at: new Date().toISOString() }); if (costError) throw costError }
+  if (isAdmin && form.purchasePrice !== '') { const { error: costError } = await supabase.from('product_costs').upsert({ product_id: productId, purchase_price: Number(form.purchasePrice), updated_by: userId, updated_at: new Date().toISOString() }); if (costError) throw costError }
   return productId
 }
 

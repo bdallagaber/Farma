@@ -6,6 +6,8 @@ import Topbar from './components/layout/Topbar'
 import InventoryPage from './pages/InventoryPage'
 import SalesPage from './pages/SalesPage'
 import CustomersPage from './pages/CustomersPage'
+import ShortagesPage from './pages/ShortagesPage'
+import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -18,5 +20,7 @@ export default function App() {
   if (!profile) return <div className="loading-screen">جاري تحميل بيانات المستخدم...</div>
   const isSalesPreview = window.location.pathname.endsWith('/sales')
   const isCustomersPreview = window.location.pathname.endsWith('/customers')
-  return <div className="app-shell"><Sidebar /><div className="main-area"><Topbar profile={profile} />{isSalesPreview ? <SalesPage /> : isCustomersPreview ? <CustomersPage userId={session.user.id} /> : <InventoryPage userId={session.user.id} isAdmin={profile.role === 'admin'} />}</div></div>
+  const isShortages = window.location.pathname.endsWith('/shortages')
+  const isOrders = window.location.pathname.endsWith('/orders')
+  return <div className="app-shell"><Sidebar /><div className="main-area"><Topbar profile={profile} />{isSalesPreview ? <SalesPage /> : isCustomersPreview ? <CustomersPage userId={session.user.id} /> : isShortages ? <ShortagesPage /> : isOrders ? <PurchaseOrdersPage isAdmin={profile.role === 'admin'} /> : <InventoryPage userId={session.user.id} isAdmin={profile.role === 'admin'} />}</div></div>
 }
