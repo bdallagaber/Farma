@@ -8,6 +8,7 @@ import SalesPage from './pages/SalesPage'
 import CustomersPage from './pages/CustomersPage'
 import ShortagesPage from './pages/ShortagesPage'
 import PurchaseOrdersPage from './pages/PurchaseOrdersPage'
+import InventoryAuditPage from './pages/InventoryAuditPage'
 
 export default function App() {
   const [session, setSession] = useState(null)
@@ -22,5 +23,6 @@ export default function App() {
   const isCustomersPreview = window.location.pathname.endsWith('/customers')
   const isShortages = window.location.pathname.endsWith('/shortages')
   const isOrders = window.location.pathname.endsWith('/orders')
-  return <div className="app-shell"><Sidebar /><div className="main-area"><Topbar profile={profile} />{isSalesPreview ? <SalesPage /> : isCustomersPreview ? <CustomersPage userId={session.user.id} /> : isShortages ? <ShortagesPage /> : isOrders ? <PurchaseOrdersPage isAdmin={profile.role === 'admin'} /> : <InventoryPage userId={session.user.id} isAdmin={profile.role === 'admin'} />}</div></div>
+  const isAudit = window.location.pathname.endsWith('/inventory-audit')
+  return <div className="app-shell"><Sidebar profile={profile} /><div className="main-area"><Topbar profile={profile} />{isSalesPreview ? <SalesPage /> : isCustomersPreview ? <CustomersPage userId={session.user.id} /> : isShortages ? <ShortagesPage /> : isOrders ? <PurchaseOrdersPage isAdmin={profile.role === 'admin'} /> : isAudit && profile.role === 'admin' ? <InventoryAuditPage /> : <InventoryPage userId={session.user.id} isAdmin={profile.role === 'admin'} />}</div></div>
 }

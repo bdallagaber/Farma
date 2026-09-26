@@ -5,6 +5,7 @@ export const NAV_ITEMS = [
   { href: 'customers.html', label: 'العملاء', icon: '👥' },
   { href: 'shortages.html', label: 'النواقص والصلاحية', icon: '⚠️' },
   { href: 'orders.html', label: 'أوامر الشراء', icon: '🧾' },
+  { href: 'inventory-audit.html', label: 'تدقيق المخزون', icon: '🧾' },
   { href: 'expenses.html', label: 'المصروفات', icon: '💳' },
   { href: 'profit.html', label: 'الأرباح والتقارير', icon: '📊' },
   { href: 'search.html', label: 'البحث عن دواء', icon: '🔎' },
