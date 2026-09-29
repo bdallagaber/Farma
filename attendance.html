@@ -65,6 +65,9 @@ document.querySelectorAll('details.collapsible[data-key]').forEach(d=>{
   if(saved==='open')d.open=true; else if(saved==='closed')d.open=false;
   d.addEventListener('toggle',()=>{localStorage.setItem(key,d.open?'open':'closed')});
 });
+// سجل الحضور يجب أن يكون ظاهرًا ومحملًا تلقائيًا عند فتح صفحة الأدمن.
+const reportCard=document.querySelector('details[data-key="report"]');
+if(reportCard){reportCard.open=true;localStorage.removeItem('att_card_report')}
 
 (async()=>{auth=await requireAuth();if(!auth)return;isAdmin=auth.profile.role==='admin';$('userinfo').textContent=auth.profile.full_name+' ('+(isAdmin?'أدمن':'موظف')+')';
 if(isAdmin){$('employeePanel').classList.add('hidden');$('employeeRequests').classList.add('hidden');$('adminPanel').classList.remove('hidden');await loadAdmin()}
@@ -123,7 +126,7 @@ async function loadMyRequests(){
 }
 
 /* ---------- لوحة الأدمن ---------- */
-async function loadAdmin(){if(!isAdmin)return;await Promise.all([loadLocation(),loadEmployees(),loadShifts(),loadSchedules(),loadAdminRequests(),loadLiveNow(),loadAttendanceAudit()]);$('manualDate').value=today();$('reportFrom').value=today().slice(0,8)+'01';$('reportTo').value=today();await loadReport()}
+async function loadAdmin(){if(!isAdmin)return;await Promise.allSettled([loadLocation(),loadEmployees(),loadShifts(),loadSchedules(),loadAdminRequests(),loadLiveNow(),loadAttendanceAudit()]);$('manualDate').value=today();$('reportFrom').value=today().slice(0,8)+'01';$('reportTo').value=today();$('reportTable').innerHTML='<p class="loading">جاري تحميل سجل الحضور...</p>';await loadReport()}
 
 async function loadLocation(){const {data,error}=await sb.from('attendance_settings').select('*').eq('id',true).maybeSingle();if(error||!data)return;$('lat').value=data.latitude??'';$('lng').value=data.longitude??'';$('radius').value=data.radius_meters??10;$('accuracy').value=data.max_gps_accuracy_meters??30}
 $('useCurrentLocation').onclick=async()=>{try{const p=await getLocation();$('lat').value=p.lat;$('lng').value=p.lng;$('locationAdminMsg').textContent='تم جلب الموقع الحالي. راجع الإحداثيات ثم احفظ.'}catch(e){setMsg('locationAdminMsg',e.message)}};
@@ -367,12 +370,12 @@ async function loadReport(){
   try{
     const [{data:reportData,error:reportError},{data:actualData,error:actualError}]=await Promise.all([
       sb.rpc('get_attendance_report',{p_from:from,p_to:to}),
-      sb.from('attendance').select('work_date,employee_id,check_in,check_out,status,late_minutes,early_arrival_minutes,early_minutes,overtime_minutes,work_minutes,profiles!attendance_employee_id_fkey(full_name)').gte('work_date',from).lte('work_date',to).order('work_date',{ascending:false}).limit(5000)
+      sb.from('attendance').select('work_date,employee_id,check_in,check_out,status,late_minutes,early_arrival_minutes,early_minutes,overtime_minutes,work_minutes').gte('work_date',from).lte('work_date',to).order('work_date',{ascending:false}).limit(5000)
     ]);
     if(reportError&&actualError){$('reportTable').innerHTML='<p class="error">تعذر تحميل التقرير: '+esc(reportError.message||actualError.message)+'</p>';return}
     const merged=[...(reportData||[])];
     (actualData||[]).forEach(a=>{
-      const actual={work_date:a.work_date,employee_id:a.employee_id,employee_name:a.profiles?.full_name||'—',shift_name:'—',shift_start:null,shift_end:null,status:a.status||'present',late_minutes:a.late_minutes||0,early_arrival_minutes:a.early_arrival_minutes||0,early_leave_minutes:a.early_minutes||0,overtime_minutes:a.overtime_minutes||0,work_minutes:a.work_minutes,check_in:a.check_in,check_out:a.check_out};
+      const actual={work_date:a.work_date,employee_id:a.employee_id,employee_name:employees.find(e=>e.id===a.employee_id)?.full_name||'—',shift_name:'—',shift_start:null,shift_end:null,status:a.status||'present',late_minutes:a.late_minutes||0,early_arrival_minutes:a.early_arrival_minutes||0,early_leave_minutes:a.early_minutes||0,overtime_minutes:a.overtime_minutes||0,work_minutes:a.work_minutes,check_in:a.check_in,check_out:a.check_out};
       const index=merged.findIndex(r=>r.work_date===actual.work_date&&r.employee_id===actual.employee_id);
       if(index===-1)merged.push(actual); else merged[index]={...merged[index],...actual};
     });
