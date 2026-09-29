@@ -75,6 +75,7 @@
     function orderErrorMessage(error) {
       const code = String(error?.message || error || '');
       const messages = {
+        order_item_edit_only_before_receiving: 'لا يمكن تعديل أو حذف صنف بعد استلام الطلبية.',
         inventory_insufficient_to_reverse: 'لا يمكن تقليل الكمية لأن المخزون الحالي أقل من الكمية التي سيتم عكسها.',
         invalid_quantity: 'اكتب كمية صحيحة أكبر من صفر.',
         order_item_not_found: 'الصنف غير موجود في الطلبية.',
@@ -87,7 +88,7 @@
     }
 
     function itemActions(item, order) {
-      if (!isAdmin || !['ordered', 'received'].includes(order.status)) return '';
+      if (!isAdmin || order.status !== 'ordered') return '';
       return '<div class="order-item-actions">' +
         '<input type="number" min="0.01" step="0.01" value="' + esc(item.boxes) + '" id="boxes_' + item.id + '" aria-label="كمية ' + esc(item.product_name_snapshot) + '">' +
         '<span>علبة</span>' +
@@ -121,7 +122,7 @@
 
       wrap.innerHTML = orders.map(order => {
         const orderItems = byOrder[order.id] || [];
-        const canManageItems = isAdmin && ['ordered', 'received'].includes(order.status);
+        const canManageItems = isAdmin && order.status === 'ordered';
         const rows = orderItems.map(item =>
           '<tr>' +
           '<td>' + esc(item.product_name_snapshot) + '</td>' +
@@ -140,7 +141,7 @@
           '<summary style="cursor:pointer;font-weight:700;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span>🔽 طلبية #' + order.order_number + '</span><span>— ' + esc(order.supplier_name) + '</span><span style="color:var(--text-muted);font-size:12px">' + egyptDate(order.created_at) + '</span><span class="tag">' + (labels[order.status] || order.status) + '</span></summary>' +
           '<div style="margin-top:12px"><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">أنشأها: ' + esc(order.profiles?.full_name || '—') + (order.received_at ? ' — استُلمت: ' + egyptDate(order.received_at) : '') + '</div>' +
           '<table style="min-width:0"><thead><tr><th>الصنف</th><th>الكمية المطلوبة</th><th>أصغر وحدة</th>' + manageHeader + '</tr></thead><tbody>' + rows + '</tbody></table>' +
-          (canManageItems ? '<p style="font-size:12px;color:var(--text-muted);margin:8px 0 0">تعديل الكمية بعد الاستلام يغيّر المخزون بالفرق فقط، والحذف يعكس الكمية المضافة. لو رجع الصنف تحت الحد الأدنى سيظهر تلقائيًا في النواقص.</p>' : '') +
+          (canManageItems ? '<p style="font-size:12px;color:var(--text-muted);margin:8px 0 0">يمكن تعديل أو حذف الأصناف قبل الضغط على تم الاستلام فقط. بعد الاستلام يتم تثبيت الطلبية.</p>' : '') +
           orderButtons + '</div></details>';
       }).join('');
     }
