@@ -37,7 +37,7 @@ details.card{padding:0;overflow:hidden}details.card>summary{cursor:pointer;list-
 
 <details class="card collapsible" data-key="requests"><summary><h2>📥 طلبات الموظفين</h2></summary><div class="three"><div><label>الحالة</label><select id="reqFilterStatus"><option value="">الكل</option><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select></div><div><label>الموظف</label><select id="reqFilterEmployee"><option value="">الكل</option></select></div><div><label>بحث بالسبب</label><input id="reqFilterSearch" placeholder="بحث..."></div></div><div id="adminRequests"><p class="loading">جاري التحميل...</p></div></details>
 
-<details class="card collapsible" data-key="report" open><summary><h2>📊 سجل الحضور</h2></summary><div class="two"><div><label>من تاريخ</label><input id="reportFrom" type="date"></div><div><label>إلى تاريخ</label><input id="reportTo" type="date"></div></div><button id="loadReport">عرض التقرير</button> <button id="exportReportBtn" class="secondary">⬇️ تصدير CSV</button><div id="reportSummary" class="report-summary"></div><div id="reportTable" class="scroll"></div></details>
+<details class="card collapsible" data-key="report" open><summary><h2>📊 سجل الحضور</h2></summary><div class="two"><div><label>من تاريخ</label><input id="reportFrom" type="date"></div><div><label>إلى تاريخ</label><input id="reportTo" type="date"></div><div><label>الموظفون <span class="muted">(يمكن اختيار أكثر من موظف — بدون اختيار = الكل)</span></label><select id="reportEmployee" multiple size="4" style="min-height:100px;margin:0"></select></div></div><button id="loadReport">عرض التقرير</button> <button id="clearReportEmployees" type="button" class="secondary">عرض كل الموظفين</button> <button id="exportReportBtn" class="secondary">⬇️ تصدير CSV</button><div id="reportSummary" class="report-summary"></div><div id="reportTable" class="scroll"></div></details>
 </div></div></div>
 <div id="decisionModal" class="modal"><div class="modal-box"><h3 id="decisionTitle">مراجعة الطلب</h3><p id="decisionDetails"></p><label>ملاحظة الأدمن <span class="muted">(اختيارية)</span></label><textarea id="adminNote" rows="4" placeholder="اكتب ملاحظتك على القرار..."></textarea><div class="form-actions"><button id="approveReq" class="ok">موافقة</button><button id="rejectReq" class="danger">رفض</button><button id="closeModal" class="secondary">إلغاء</button></div></div></div>
 <div id="editRequestModal" class="modal"><div class="modal-box"><h3>تعديل الطلب</h3><label>نوع الطلب</label><select id="editReqType"><option value="leave">🏖️ إجازة</option><option value="late_permission">🕐 إذن تأخير</option><option value="early_leave">🚪 إذن انصراف مبكر</option><option value="other">📝 أخرى</option></select><div class="two"><div><label>من تاريخ</label><input id="editReqStart" type="date"></div><div id="editReqEndWrap"><label>إلى تاريخ</label><input id="editReqEnd" type="date"></div></div><div id="editReqTimeWrap"><label>الوقت</label><input id="editReqTime" type="time"></div><label>السبب</label><textarea id="editReqReason" rows="3"></textarea><label>الحالة</label><select id="editReqStatus"><option value="pending">قيد المراجعة</option><option value="approved">مقبول</option><option value="rejected">مرفوض</option></select><input type="hidden" id="editReqId"><div class="form-actions"><button id="saveEditReq" class="ok">حفظ</button><button id="closeEditReq" class="secondary">إلغاء</button></div><div id="editReqMsg" class="msg"></div></div></div>
@@ -147,7 +147,7 @@ async function loadEmployees(){
   if(error){employees=[];$('scheduleEmployee').innerHTML='<option value="">تعذر تحميل الموظفين</option>';$('manualEmployee').innerHTML='<option value="">تعذر تحميل الموظفين</option>';return}
   employees=data||[];
   const opts=employees.map(e=>'<option value="'+e.id+'">'+esc(e.full_name)+(e.role==='admin'?' (أدمن)':'')+'</option>').join('')||'<option value="">لا يوجد موظفون</option>';
-  $('scheduleEmployee').innerHTML=opts;$('manualEmployee').innerHTML=opts;if($('adminReqEmployee'))$('adminReqEmployee').innerHTML=opts;
+  $('scheduleEmployee').innerHTML=opts;$('manualEmployee').innerHTML=opts;if($('adminReqEmployee'))$('adminReqEmployee').innerHTML=opts;if($('reportEmployee'))$('reportEmployee').innerHTML=opts;
 }
 
 /* ---------- تعديل حضور يدوي ---------- */
@@ -353,6 +353,8 @@ async function loadAttendanceAudit(){const {data,error}=await sb.from('attendanc
 
 /* ---------- التقرير + تصدير CSV ---------- */
 $('loadReport').onclick=loadReport;
+$('reportEmployee').addEventListener('change',loadReport);
+$('clearReportEmployees').onclick=()=>{Array.from($('reportEmployee').options).forEach(o=>o.selected=false);loadReport()};
 async function loadReport(){
   if(!isAdmin||reportLoading)return;
   const from=$('reportFrom').value,to=$('reportTo').value;
@@ -365,7 +367,9 @@ async function loadReport(){
   try{
     const {data,error}=await sb.rpc('get_attendance_report',{p_from:from,p_to:to});
     if(error){$('reportTable').innerHTML='<p class="error">تعذر تحميل التقرير: '+esc(error.message)+'</p>';return}
-    const rows=data||[];lastReportRows=rows;
+    const selectedEmployees=Array.from($('reportEmployee').selectedOptions).map(o=>o.value);
+    const rows=(data||[]).filter(r=>!selectedEmployees.length||selectedEmployees.includes(r.employee_id));
+    lastReportRows=rows;
 const counts={present:0,late:0,absent:0,leave:0,off:0,not_started:0,incomplete:0};
     rows.forEach(r=>{if(counts[r.status]!==undefined)counts[r.status]++});
     $('reportSummary').innerHTML=[['present','حاضر'],['late','متأخر'],['absent','غائب'],['leave','إجازة'],['not_started','لم يبدأ الشيفت'],['incomplete','سجل غير مكتمل'],['off','راحة']].map(([k,l])=>'<div class="att-card"><div class="n">'+counts[k]+'</div><div class="l">'+l+'</div></div>').join('');
