@@ -1147,6 +1147,44 @@ function getInvQty(p) {
 }
 
 
+
+function productBarcodes(p) {
+  return [p && p.qr_code, ...((p && p.barcodes) || [])]
+    .map(v => String(v == null ? '' : v).trim()).filter(Boolean);
+}
+function productMatchesBarcode(p, code) {
+  const value = String(code == null ? '' : code).trim();
+  return value !== '' && productBarcodes(p).includes(value);
+}
+async function ensureProductBarcode(productId, barcode) {
+  const value = String(barcode == null ? '' : barcode).trim();
+  if (!productId || !value) return;
+  const { data: existing, error: lookupError } = await sb.from('product_barcodes')
+    .select('id, product_id').eq('barcode', value).limit(1);
+  if (lookupError) throw lookupError;
+  if (existing && existing.length) {
+    if (existing[0].product_id !== productId) throw new Error('الباركود ده مسجّل بالفعل لمنتج تاني');
+    return;
+  }
+  const { error } = await sb.from('product_barcodes').insert({ product_id: productId, barcode: value });
+  if (error) throw error;
+}
+async function loadProductBarcodes(products) {
+  const byProduct = {}, PAGE_SIZE = 1000;
+  let from = 0;
+  while (true) {
+    const { data, error } = await sb.from('product_barcodes').select('product_id, barcode').range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    (data || []).forEach(row => {
+      if (!byProduct[row.product_id]) byProduct[row.product_id] = [];
+      if (row.barcode) byProduct[row.product_id].push(String(row.barcode).trim());
+    });
+    if (!data || data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+  (products || []).forEach(x => { x.barcodes = byProduct[x.id] || []; x._farmaSearchText = null; });
+}
+
 /* ============================================================
    Custom Options
 ============================================================ */
@@ -3096,7 +3134,7 @@ function fuzzyIncludes(
 }
 function fuzzyIncludesProduct(product, term) {
   if (!term) return true;
-  if (!product._farmaSearchText) product._farmaSearchText = normalizeForSearch((product.name || '') + ' ' + (product.name_en || ''));
+  if (!product._farmaSearchText) product._farmaSearchText = normalizeForSearch((product.name || '') + ' ' + (product.name_en || '') + ' ' + productBarcodes(product).join(' '));
   const normTerm = normalizeForSearch(term);
   if (product._farmaSearchText.includes(normTerm)) return true;
   const words = term.trim().split(/\s+/).filter(Boolean);
@@ -3253,6 +3291,8 @@ async function loadInventory() {
 
   window._productsCache =
     products || [];
+
+  try { await loadProductBarcodes(window._productsCache); } catch (e) { console.warn('تعذّر تحميل الباركودات الإضافية:', e); }
 
   populateFilterDropdowns();
 
@@ -4411,6 +4451,8 @@ document
         }
 
 
+        await ensureProductBarcode(productId, qr);
+
         if (
           isAdmin &&
           purchasePriceRaw !== ''
@@ -5358,7 +5400,7 @@ function handleScanResult(
       []
     ).find(
       p =>
-        p.qr_code === code
+        productMatchesBarcode(p, code)
     );
 
 

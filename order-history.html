@@ -1,15 +1,187 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>سجل الطلبيات - نظام إدارة الصيدلية</title><script src="supabase-lib.js?v=87a676e"></script><link rel="stylesheet" href="style.css?v=87a676e"><style>body.has-sidebar{visibility:visible!important}</style></head>
-<body class="has-sidebar"><header><button id="menuToggle">☰</button><h1>📦 نظام إدارة الصيدلية</h1><div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px">خروج</button></div></header>
-<nav><a href="inventory.html">المخزون</a><a href="shortages.html">النواقص</a><a href="order-history.html" class="active">سجل الطلبيات</a><a href="sales.html">المبيعات</a><a href="invoices.html">🧾 الفواتير</a><a href="customers.html">👥 العملاء</a><a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a><a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a></nav><div id="sidebarOverlay" class="sidebar-overlay"></div>
-<main class="main-content"><div class="card"><h2>📋 سجل الطلبيات</h2><p class="sub">كل طلبية محفوظة حسب المورد والتاريخ، ولا تُضاف للمخزون إلا بعد الضغط على «تم الاستلام».</p><div id="ordersWrap"><p class="loading">جاري تحميل سجل الطلبيات...</p></div></div></main>
-<script src="config.js?v=87a676e"></script><script>
-const labels={ordered:'تم الطلب',received:'تم الاستلام',cancelled:'ملغاة'};let isAdmin=false;
-(async()=>{const a=await requireAuth();if(!a)return;if(!guardPageAccess(a.profile,'order-history'))return;isAdmin=a.profile.role==='admin';document.getElementById('userinfo').textContent=a.profile.full_name+' ('+(isAdmin?'أدمن':'موظف')+')';await loadOrders()})();
-document.getElementById('logoutBtn').onclick=async()=>{await sb.auth.signOut();location.href='index.html'};
-function esc(v){const d=document.createElement('div');d.textContent=v==null?'':String(v);return d.innerHTML}function egyptDate(v){return new Date(v).toLocaleString('ar-EG',{timeZone:'Africa/Cairo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})}
-async function loadOrders(){const w=document.getElementById('ordersWrap');const [{data:orders,error},{data:items}]=await Promise.all([sb.from('purchase_orders').select('id,order_number,supplier_name,status,notes,created_at,received_at,profiles!purchase_orders_created_by_fkey(full_name)').order('created_at',{ascending:false}).limit(500),sb.from('purchase_order_items').select('order_id,product_name_snapshot,boxes,quantity_smallest_unit,unit_large,unit_medium,unit_small').limit(5000)]);if(error){w.innerHTML='<p class="msg error">تعذر تحميل السجل: '+esc(error.message)+'</p>';return}const by={};(items||[]).forEach(i=>(by[i.order_id]??=[]).push(i));if(!orders?.length){w.innerHTML='<p class="empty-ok">لا توجد طلبيات محفوظة حتى الآن</p>';return}w.innerHTML=orders.map(o=>{const its=by[o.id]||[];return '<details class="order-card" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface)"><summary style="cursor:pointer;font-weight:700;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span>🔽 طلبية #'+o.order_number+'</span><span>— '+esc(o.supplier_name)+'</span><span style="color:var(--text-muted);font-size:12px">'+egyptDate(o.created_at)+'</span><span class="tag">'+labels[o.status]+'</span></summary><div style="margin-top:12px"><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">أنشأها: '+esc(o.profiles?.full_name||'—')+(o.received_at?' — استُلمت: '+egyptDate(o.received_at):'')+'</div><table style="min-width:0"><thead><tr><th>الصنف</th><th>الكمية المطلوبة</th><th>أصغر وحدة</th></tr></thead><tbody>'+its.map(i=>'<tr><td>'+esc(i.product_name_snapshot)+'</td><td>'+Number(i.boxes).toLocaleString('ar-EG')+' علبة</td><td>'+Number(i.quantity_smallest_unit).toLocaleString('ar-EG')+'</td></tr>').join('')+'</tbody></table>'+(isAdmin&&o.status==='ordered'?'<div style="display:flex;gap:8px;margin-top:12px"><button type="button" onclick="receiveOrder(\''+o.id+'\')">✅ تم الاستلام</button><button type="button" class="danger" onclick="cancelOrder(\''+o.id+'\')">إلغاء الطلبية</button></div>':(isAdmin&&o.status==='cancelled'?'<div style="margin-top:12px"><button type="button" class="danger" onclick="deleteOrder(\''+o.id+'\')">🗑️ حذف الطلبية نهائيًا</button></div>':'') )+'</div></details>'}).join('')}
-async function receiveOrder(id){if(!confirm('سيتم إضافة كميات الطلبية إلى المخزون وتغيير حالتها إلى تم الاستلام. هل تريد المتابعة؟'))return;const {error}=await sb.rpc('receive_purchase_order',{p_order_id:id});if(error){alert('تعذر استلام الطلبية: '+error.message);return}await loadOrders()}
-async function deleteOrder(id){if(!confirm('سيتم حذف الطلبية الملغاة وتفاصيلها نهائيًا. هل تريد المتابعة؟'))return;const {error}=await sb.rpc('delete_purchase_order',{p_order_id:id});if(error){alert('تعذر حذف الطلبية: '+error.message);return}await loadOrders()}
-async function cancelOrder(id){if(!confirm('هل تريد إلغاء هذه الطلبية؟ لن يتم تعديل المخزون.'))return;const {error}=await sb.rpc('cancel_purchase_order',{p_order_id:id});if(error){alert('تعذر إلغاء الطلبية: '+error.message);return}await loadOrders()}
-</script></body></html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>سجل الطلبيات - نظام إدارة الصيدلية</title>
+  <script src="supabase-lib.js?v=87a676e"></script>
+  <link rel="stylesheet" href="style.css?v=87a676e">
+  <style>
+    body.has-sidebar { visibility: visible !important; }
+    .order-item-actions { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .order-item-actions input { width:90px; min-width:70px; margin:0; padding:6px; }
+    .order-item-actions button { margin:0; padding:6px 9px; font-size:12px; }
+    .order-item-actions .danger { color:#fff; background:#dc3545; }
+    @media (max-width:600px) {
+      .order-item-actions input { width:74px; }
+      .order-item-actions button { padding:6px; }
+    }
+  </style>
+</head>
+<body class="has-sidebar">
+  <header>
+    <button id="menuToggle">☰</button>
+    <h1>📦 نظام إدارة الصيدلية</h1>
+    <div><span class="userinfo" id="userinfo"></span><button id="logoutBtn" style="margin-right:8px">خروج</button></div>
+  </header>
+  <nav>
+    <a href="inventory.html">المخزون</a><a href="shortages.html">النواقص</a>
+    <a href="order-history.html" class="active">سجل الطلبيات</a><a href="sales.html">المبيعات</a>
+    <a href="invoices.html">🧾 الفواتير</a><a href="customers.html">👥 العملاء</a>
+    <a href="expenses.html">المصروفات</a><a href="profit.html">الأرباح</a>
+    <a href="search.html">🔍 بحث الأدوية</a><a href="users.html">الإعدادات</a>
+  </nav>
+  <div id="sidebarOverlay" class="sidebar-overlay"></div>
+  <main class="main-content">
+    <div class="card">
+      <h2>📋 سجل الطلبيات</h2>
+      <p class="sub">كل طلبية محفوظة حسب المورد والتاريخ، ولا تُضاف للمخزون إلا بعد الضغط على «تم الاستلام».</p>
+      <div id="ordersWrap"><p class="loading">جاري تحميل سجل الطلبيات...</p></div>
+    </div>
+  </main>
+
+  <script src="config.js?v=87a676e"></script>
+  <script>
+    const labels = { ordered: 'تم الطلب', received: 'تم الاستلام', cancelled: 'ملغاة' };
+    let isAdmin = false;
+
+    (async () => {
+      const auth = await requireAuth();
+      if (!auth) return;
+      if (!guardPageAccess(auth.profile, 'order-history')) return;
+      isAdmin = auth.profile.role === 'admin';
+      document.getElementById('userinfo').textContent = auth.profile.full_name + ' (' + (isAdmin ? 'أدمن' : 'موظف') + ')';
+      await loadOrders();
+    })();
+
+    document.getElementById('logoutBtn').onclick = async () => {
+      await sb.auth.signOut();
+      location.href = 'index.html';
+    };
+
+    function esc(value) {
+      const div = document.createElement('div');
+      div.textContent = value == null ? '' : String(value);
+      return div.innerHTML;
+    }
+
+    function egyptDate(value) {
+      return new Date(value).toLocaleString('ar-EG', {
+        timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function orderErrorMessage(error) {
+      const code = String(error?.message || error || '');
+      const messages = {
+        inventory_insufficient_to_reverse: 'لا يمكن تقليل الكمية لأن المخزون الحالي أقل من الكمية التي سيتم عكسها.',
+        invalid_quantity: 'اكتب كمية صحيحة أكبر من صفر.',
+        order_item_not_found: 'الصنف غير موجود في الطلبية.',
+        order_not_editable: 'لا يمكن تعديل طلبية ملغاة.',
+        order_not_open: 'الطلبية لم تعد مفتوحة لهذا الإجراء.',
+        admin_only: 'التعديل متاح للأدمن فقط.'
+      };
+      const key = Object.keys(messages).find(k => code.includes(k));
+      return key ? messages[key] : code;
+    }
+
+    function itemActions(item, order) {
+      if (!isAdmin || !['ordered', 'received'].includes(order.status)) return '';
+      return '<div class="order-item-actions">' +
+        '<input type="number" min="0.01" step="0.01" value="' + esc(item.boxes) + '" id="boxes_' + item.id + '" aria-label="كمية ' + esc(item.product_name_snapshot) + '">' +
+        '<span>علبة</span>' +
+        '<button type="button" class="secondary" onclick="updateOrderItem(\'' + item.id + '\')">حفظ التعديل</button>' +
+        '<button type="button" class="danger" onclick="deleteOrderItem(\'' + item.id + '\')">حذف</button>' +
+        '</div>';
+    }
+
+    async function loadOrders() {
+      const wrap = document.getElementById('ordersWrap');
+      const [{ data: orders, error }, { data: items, error: itemsError }] = await Promise.all([
+        sb.from('purchase_orders')
+          .select('id,order_number,supplier_name,status,notes,created_at,received_at,profiles!purchase_orders_created_by_fkey(full_name)')
+          .order('created_at', { ascending: false }).limit(500),
+        sb.from('purchase_order_items')
+          .select('id,order_id,product_id,product_name_snapshot,boxes,quantity_smallest_unit,unit_large_to_medium,unit_medium_to_small,unit_large,unit_medium,unit_small')
+          .limit(5000)
+      ]);
+
+      if (error || itemsError) {
+        wrap.innerHTML = '<p class="msg error">تعذر تحميل السجل: ' + esc((error || itemsError).message) + '</p>';
+        return;
+      }
+
+      const byOrder = {};
+      (items || []).forEach(item => (byOrder[item.order_id] ??= []).push(item));
+      if (!orders?.length) {
+        wrap.innerHTML = '<p class="empty-ok">لا توجد طلبيات محفوظة حتى الآن</p>';
+        return;
+      }
+
+      wrap.innerHTML = orders.map(order => {
+        const orderItems = byOrder[order.id] || [];
+        const canManageItems = isAdmin && ['ordered', 'received'].includes(order.status);
+        const rows = orderItems.map(item =>
+          '<tr>' +
+          '<td>' + esc(item.product_name_snapshot) + '</td>' +
+          '<td>' + Number(item.boxes).toLocaleString('ar-EG') + ' علبة</td>' +
+          '<td>' + Number(item.quantity_smallest_unit).toLocaleString('ar-EG') + '</td>' +
+          (canManageItems ? '<td>' + itemActions(item, order) + '</td>' : '') +
+          '</tr>'
+        ).join('');
+        const manageHeader = canManageItems ? '<th>تعديل الصنف</th>' : '';
+        const orderButtons = isAdmin && order.status === 'ordered'
+          ? '<div style="display:flex;gap:8px;margin-top:12px"><button type="button" onclick="receiveOrder(\'' + order.id + '\')">✅ تم الاستلام</button><button type="button" class="danger" onclick="cancelOrder(\'' + order.id + '\')">إلغاء الطلبية</button></div>'
+          : isAdmin && order.status === 'cancelled'
+            ? '<div style="margin-top:12px"><button type="button" class="danger" onclick="deleteOrder(\'' + order.id + '\')">🗑️ حذف الطلبية نهائيًا</button></div>'
+            : '';
+        return '<details class="order-card" style="border:1px solid var(--border);border-radius:10px;padding:12px;margin:10px 0;background:var(--surface)">' +
+          '<summary style="cursor:pointer;font-weight:700;display:flex;gap:10px;flex-wrap:wrap;align-items:center"><span>🔽 طلبية #' + order.order_number + '</span><span>— ' + esc(order.supplier_name) + '</span><span style="color:var(--text-muted);font-size:12px">' + egyptDate(order.created_at) + '</span><span class="tag">' + (labels[order.status] || order.status) + '</span></summary>' +
+          '<div style="margin-top:12px"><div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">أنشأها: ' + esc(order.profiles?.full_name || '—') + (order.received_at ? ' — استُلمت: ' + egyptDate(order.received_at) : '') + '</div>' +
+          '<table style="min-width:0"><thead><tr><th>الصنف</th><th>الكمية المطلوبة</th><th>أصغر وحدة</th>' + manageHeader + '</tr></thead><tbody>' + rows + '</tbody></table>' +
+          (canManageItems ? '<p style="font-size:12px;color:var(--text-muted);margin:8px 0 0">تعديل الكمية بعد الاستلام يغيّر المخزون بالفرق فقط، والحذف يعكس الكمية المضافة. لو رجع الصنف تحت الحد الأدنى سيظهر تلقائيًا في النواقص.</p>' : '') +
+          orderButtons + '</div></details>';
+      }).join('');
+    }
+
+    window.updateOrderItem = async function (itemId) {
+      const input = document.getElementById('boxes_' + itemId);
+      const boxes = Number(input?.value);
+      if (!Number.isFinite(boxes) || boxes <= 0) { alert('اكتب كمية صحيحة أكبر من صفر.'); return; }
+      if (!confirm('سيتم تعديل كمية الصنف وتحديث المخزون بالفرق. هل تريد المتابعة؟')) return;
+      const { error } = await sb.rpc('update_purchase_order_item', { p_item_id: itemId, p_boxes: boxes });
+      if (error) { alert('تعذر تعديل الصنف: ' + orderErrorMessage(error)); return; }
+      await loadOrders();
+    };
+
+    window.deleteOrderItem = async function (itemId) {
+      if (!confirm('سيتم حذف الصنف من الطلبية، وبعد الاستلام سيتم خصم الكمية التي أضيفت للمخزون. هل تريد المتابعة؟')) return;
+      const { error } = await sb.rpc('delete_purchase_order_item', { p_item_id: itemId });
+      if (error) { alert('تعذر حذف الصنف: ' + orderErrorMessage(error)); return; }
+      await loadOrders();
+    };
+
+    window.receiveOrder = async function (id) {
+      if (!confirm('سيتم إضافة كميات الطلبية إلى المخزون وتغيير حالتها إلى تم الاستلام. هل تريد المتابعة؟')) return;
+      const { error } = await sb.rpc('receive_purchase_order', { p_order_id: id });
+      if (error) { alert('تعذر استلام الطلبية: ' + orderErrorMessage(error)); return; }
+      await loadOrders();
+    };
+
+    window.deleteOrder = async function (id) {
+      if (!confirm('سيتم حذف الطلبية الملغاة وتفاصيلها نهائيًا. هل تريد المتابعة؟')) return;
+      const { error } = await sb.rpc('delete_purchase_order', { p_order_id: id });
+      if (error) { alert('تعذر حذف الطلبية: ' + orderErrorMessage(error)); return; }
+      await loadOrders();
+    };
+
+    window.cancelOrder = async function (id) {
+      if (!confirm('هل تريد إلغاء هذه الطلبية؟ لن يتم تعديل المخزون.')) return;
+      const { error } = await sb.rpc('cancel_purchase_order', { p_order_id: id });
+      if (error) { alert('تعذر إلغاء الطلبية: ' + orderErrorMessage(error)); return; }
+      await loadOrders();
+    };
+  </script>
+</body>
+</html>

@@ -686,6 +686,20 @@ let isAdmin = false;
 let productsCache = [];
 let customersCache = [];
 
+function productBarcodes(p) { return [p && p.qr_code, ...((p && p.barcodes) || [])].map(v => String(v == null ? '' : v).trim()).filter(Boolean); }
+function productMatchesBarcode(p, code) { const value = String(code == null ? '' : code).trim(); return value !== '' && productBarcodes(p).includes(value); }
+async function loadProductBarcodes(products) {
+  const byProduct = {}, PAGE_SIZE = 1000; let from = 0;
+  while (true) {
+    const { data, error } = await sb.from('product_barcodes').select('product_id, barcode').range(from, from + PAGE_SIZE - 1);
+    if (error) throw error;
+    (data || []).forEach(row => { if (!byProduct[row.product_id]) byProduct[row.product_id] = []; if (row.barcode) byProduct[row.product_id].push(String(row.barcode).trim()); });
+    if (!data || data.length < PAGE_SIZE) break; from += PAGE_SIZE;
+  }
+  (products || []).forEach(x => { x.barcodes = byProduct[x.id] || []; });
+}
+
+
 
 /* =========================================================
    حساب شكل المخزون
@@ -904,6 +918,8 @@ async function loadProducts() {
 
   productsCache = all;
 
+  try { await loadProductBarcodes(productsCache); } catch (e) { console.warn('تعذّر تحميل الباركودات الإضافية:', e); }
+
 
   renderProductOptions(
     document.getElementById(
@@ -924,6 +940,7 @@ function renderProductOptions(searchText) {
     productsCache.filter(
       p =>
         !term ||
+        productMatchesBarcode(p, term) ||
         fuzzyIncludes(
           (p.name || '') +
           ' ' +
@@ -1575,7 +1592,7 @@ function handleScanResult(code) {
   const match =
     productsCache.find(
       p =>
-        p.qr_code === code
+        productMatchesBarcode(p, code)
     );
 
 

@@ -177,6 +177,7 @@
       from += PAGE_SIZE;
     }
     allProducts = all;
+    await loadProductBarcodes(allProducts);
     renderResults();
   }
 
@@ -189,11 +190,25 @@
   document.getElementById('barcodeInput').addEventListener('input', (e) => {
     const code = e.target.value.trim();
     if (!code) { renderResults(); return; }
-    const match = allProducts.find(p => p.qr_code === code);
+    const match = allProducts.find(p => productMatchesBarcode(p, code));
     const wrap = document.getElementById('resultsWrap');
     wrap.innerHTML = match ? renderCard(match) : '<p class="loading">مفيش منتج مسجّل بالباركود ده</p>';
   });
 
+  async function loadProductBarcodes(products) {
+    const byProduct = {}, PAGE_SIZE = 1000; let from = 0;
+    while (true) {
+      const { data, error } = await sb.from('product_barcodes').select('product_id, barcode').range(from, from + PAGE_SIZE - 1);
+      if (error) throw error;
+      (data || []).forEach(row => { if (!byProduct[row.product_id]) byProduct[row.product_id] = []; if (row.barcode) byProduct[row.product_id].push(String(row.barcode).trim()); });
+      if (!data || data.length < PAGE_SIZE) break; from += PAGE_SIZE;
+    }
+    (products || []).forEach(x => { x.barcodes = byProduct[x.id] || []; });
+  }
+  function productMatchesBarcode(p, code) {
+    const value = String(code || '').trim();
+    return value !== '' && [p.qr_code, ...((p.barcodes || []))].map(v => String(v || '').trim()).includes(value);
+  }
   function getQty(p) {
     if (!p.inventory) return 0;
     const row = Array.isArray(p.inventory) ? p.inventory[0] : p.inventory;
