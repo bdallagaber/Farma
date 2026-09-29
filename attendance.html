@@ -365,10 +365,19 @@ async function loadReport(){
   reportLoading=true;$('loadReport').disabled=true;
   $('reportTable').innerHTML='<p class="loading">جاري تحميل التقرير...</p>';$('reportSummary').innerHTML='';
   try{
-    const {data,error}=await sb.rpc('get_attendance_report',{p_from:from,p_to:to});
-    if(error){$('reportTable').innerHTML='<p class="error">تعذر تحميل التقرير: '+esc(error.message)+'</p>';return}
+    const [{data:reportData,error:reportError},{data:actualData,error:actualError}]=await Promise.all([
+      sb.rpc('get_attendance_report',{p_from:from,p_to:to}),
+      sb.from('attendance').select('work_date,employee_id,check_in,check_out,status,late_minutes,early_arrival_minutes,early_minutes,overtime_minutes,work_minutes,profiles!attendance_employee_id_fkey(full_name)').gte('work_date',from).lte('work_date',to).order('work_date',{ascending:false}).limit(5000)
+    ]);
+    if(reportError&&actualError){$('reportTable').innerHTML='<p class="error">تعذر تحميل التقرير: '+esc(reportError.message||actualError.message)+'</p>';return}
+    const merged=[...(reportData||[])];
+    (actualData||[]).forEach(a=>{
+      const actual={work_date:a.work_date,employee_id:a.employee_id,employee_name:a.profiles?.full_name||'—',shift_name:'—',shift_start:null,shift_end:null,status:a.status||'present',late_minutes:a.late_minutes||0,early_arrival_minutes:a.early_arrival_minutes||0,early_leave_minutes:a.early_minutes||0,overtime_minutes:a.overtime_minutes||0,work_minutes:a.work_minutes,check_in:a.check_in,check_out:a.check_out};
+      const index=merged.findIndex(r=>r.work_date===actual.work_date&&r.employee_id===actual.employee_id);
+      if(index===-1)merged.push(actual); else merged[index]={...merged[index],...actual};
+    });
     const selectedEmployees=selectedReportEmployees();
-    const rows=(data||[]).filter(r=>!selectedEmployees.length||selectedEmployees.includes(r.employee_id));
+    const rows=merged.filter(r=>!selectedEmployees.length||selectedEmployees.includes(r.employee_id)).sort((a,b)=>String(b.work_date).localeCompare(String(a.work_date))||String(a.employee_name||'').localeCompare(String(b.employee_name||'')));
     lastReportRows=rows;
 const counts={present:0,late:0,absent:0,leave:0,off:0,not_started:0,incomplete:0};
     rows.forEach(r=>{if(counts[r.status]!==undefined)counts[r.status]++});
