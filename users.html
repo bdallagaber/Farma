@@ -93,6 +93,12 @@
     <h2>👥 المستخدمين الحاليين</h2>
     <div id="usersTableWrap"><p class="loading">جاري التحميل...</p></div>
   </div>
+
+  <div class="card">
+    <h2>🗃️ سجل الموظفين المحذوفين</h2>
+    <p class="muted">حسابات الدخول محذوفة، لكن بيانات الموظف وسجلات عملياته السابقة محفوظة هنا.</p>
+    <div id="deletedUsersWrap"><p class="loading">جاري تحميل السجل...</p></div>
+  </div>
 </div>
 
 <div id="deniedBox" class="hidden denied">هذا القسم مخصص للأدمن فقط</div>
@@ -239,6 +245,7 @@
     }
     if (!data || data.length === 0) {
       wrap.innerHTML = '<p class="loading">لا يوجد مستخدمين</p>';
+      await loadDeletedUsers();
       return;
     }
 
@@ -266,6 +273,26 @@
     }
     html += '</tbody></table>';
     wrap.innerHTML = html;
+    await loadDeletedUsers();
+  }
+
+  async function loadDeletedUsers() {
+    const wrap = document.getElementById('deletedUsersWrap');
+    const { data, error } = await sb.from('deleted_employees')
+      .select('user_id,full_name,email,role,deleted_at')
+      .order('deleted_at', { ascending: false }).limit(200);
+    if (error) {
+      wrap.innerHTML = '<p class="msg error">تعذّر تحميل الأرشيف: ' + escapeHtml(error.message) + '</p>';
+      return;
+    }
+    if (!data || !data.length) {
+      wrap.innerHTML = '<p class="loading">لا توجد حسابات محذوفة مسجلة.</p>';
+      return;
+    }
+    wrap.innerHTML = '<div class="table-scroll"><table><thead><tr><th>الاسم</th><th>البريد</th><th>الدور السابق</th><th>تاريخ الحذف</th></tr></thead><tbody>' +
+      data.map(u => '<tr><td>' + escapeHtml(u.full_name || '—') + '</td><td>' + escapeHtml(u.email || '—') + '</td><td>' +
+        (u.role === 'admin' ? 'أدمن' : 'موظف') + '</td><td>' + escapeHtml(new Date(u.deleted_at).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })) +
+        '</td></tr>').join('') + '</tbody></table></div>';
   }
 
   window.toggleRole = async function(userId, currentRole) {
@@ -310,9 +337,9 @@
   };
 
   window.deleteUser = async function(userId, name) {
-    if (!confirm('متأكد إنك عايز تحذف "' + name + '"؟\n\nملحوظة: ده هيمنعه من الدخول للسيستم نهائيًا، بس مش هيمسح حسابه بالكامل من نظام تسجيل الدخول (قيد تقني، مش خطر أمني).')) return;
-    const { error } = await sb.from('profiles').delete().eq('id', userId);
-    if (error) { alert('حصل خطأ: ' + error.message); return; }
+    if (!confirm('متأكد من حذف حساب "' + name + '" نهائيًا؟ سيتم إلغاء دخوله وحفظ ملفه وسجلات عملياته السابقة في الأرشيف.')) return;
+    const { error } = await sb.functions.invoke('delete-user', { body: { user_id: userId } });
+    if (error) { alert('تعذّر حذف الحساب: ' + error.message); return; }
     await loadUsers();
   };
 

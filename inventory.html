@@ -634,6 +634,11 @@ function ensureXLSX() { return loadScriptOnce('xlsx-lib.js'); }
     </p>
   </div>
 
+  <details id="deletedProductsPanel" style="margin-top:18px;" hidden>
+    <summary style="cursor:pointer;font-weight:700;padding:10px 0;">سجل المنتجات المحذوفة</summary>
+    <div id="deletedProductsWrap"><p class="loading">افتح السجل لعرض المنتجات المؤرشفة.</p></div>
+  </details>
+
 </div>
 
 
@@ -4964,6 +4969,37 @@ window.editProduct =
    حذف المنتج
 ============================================================ */
 
+function escapeArchiveText(value) {
+  const node = document.createElement('span');
+  node.textContent = value == null ? '' : String(value);
+  return node.innerHTML;
+}
+
+async function loadDeletedProducts() {
+  const wrap = document.getElementById('deletedProductsWrap');
+  if (!wrap || !isAdmin) return;
+  wrap.innerHTML = '<p class="loading">جاري تحميل السجل...</p>';
+  const { data, error } = await sb.from('deleted_products')
+    .select('product_id,display_name,deleted_at')
+    .order('deleted_at', { ascending: false }).limit(200);
+  if (error) {
+    wrap.innerHTML = '<p class="msg error">تعذّر تحميل سجل المحذوفات: ' + escapeArchiveText(error.message) + '</p>';
+    return;
+  }
+  if (!data || !data.length) {
+    wrap.innerHTML = '<p class="loading">لا توجد منتجات محذوفة مسجلة.</p>';
+    return;
+  }
+  wrap.innerHTML = '<div class="table-scroll"><table><thead><tr><th>المنتج</th><th>تاريخ الحذف</th></tr></thead><tbody>' +
+    data.map(row => '<tr><td>' + escapeArchiveText(row.display_name) + '</td><td>' +
+      escapeArchiveText(new Date(row.deleted_at).toLocaleString('ar-EG', { timeZone: 'Africa/Cairo' })) +
+      '</td></tr>').join('') + '</tbody></table></div>';
+}
+
+document.getElementById('deletedProductsPanel').addEventListener('toggle', event => {
+  if (event.currentTarget.open) loadDeletedProducts();
+});
+
 window.deleteProduct =
   async function(
     id,
@@ -4974,7 +5010,7 @@ window.deleteProduct =
       !confirm(
         'متأكد إنك عايز تمسح "' +
         name +
-        '"؟ الإجراء ده مش هيترجع.'
+        '" من المخزون النشط؟ هتفضل عمليات البيع والشراء القديمة محفوظة، وهيتسجل المنتج في سجل المحذوفات.'
       )
     ) {
       return;
@@ -5006,6 +5042,9 @@ window.deleteProduct =
 
 
     await loadInventory();
+    if (isAdmin && document.getElementById('deletedProductsPanel').open) {
+      await loadDeletedProducts();
+    }
 
   };
 
@@ -7836,6 +7875,7 @@ document
     'admin';
 
 
+
   document.getElementById(
     'userinfo'
   ).textContent =
@@ -7850,6 +7890,8 @@ document
 
 
   if (isAdmin) {
+
+    document.getElementById('deletedProductsPanel').hidden = false;
 
     document.getElementById(
       'purchase_price_wrap'

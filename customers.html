@@ -67,9 +67,9 @@ async function loadCustomers(){
   const wrap=document.getElementById('customersWrap');
   const [{data:custs,error},{data:ledger},{data:sales},{data:followups},{data:products},{data:invoices},{data:employees}]=await Promise.all([
     sb.from('customers').select('id,name,phone,whatsapp,area,address,location,notes,category,status,credit_limit,created_at').order('name'),
-    sb.from('customer_ledger').select('id,customer_id,amount,note,created_at,created_by,profiles(full_name)'),
-    sb.from('sales').select('id,sale_group_id,customer_id,product_id,quantity,unit_sold,sale_price,created_at,products(name)').not('customer_id','is',null).order('created_at',{ascending:false}),
-    sb.from('customer_followups').select('id,customer_id,followup_type,product_id,note,next_followup_date,status,created_at,created_by,products(name),profiles(full_name)').order('created_at',{ascending:false}),
+    sb.from('customer_ledger').select('id,customer_id,amount,note,created_at,created_by,created_by_name_snapshot,profiles(full_name)'),
+    sb.from('sales').select('id,sale_group_id,customer_id,product_id,product_name_snapshot,quantity,unit_sold,sale_price,created_at,products(name)').not('customer_id','is',null).order('created_at',{ascending:false}),
+    sb.from('customer_followups').select('id,customer_id,followup_type,product_id,product_name_snapshot,note,next_followup_date,status,created_at,created_by,created_by_name_snapshot,assigned_to,assigned_to_name_snapshot,completed_by,completed_by_name_snapshot,products(name),profiles(full_name)').order('created_at',{ascending:false}),
     sb.from('products').select('id,name').order('name'),sb.from('invoices').select('sale_group_id,invoice_number,customer_id,total,paid_amount,remaining_amount,payment_status,created_at').order('created_at',{ascending:false}),sb.from('profiles').select('id,full_name').order('full_name')
   ]);
   if(error){wrap.innerHTML='<p style="color:#dc2626">تعذّر تحميل العملاء: '+esc(error.message)+'</p>';return}
@@ -208,7 +208,7 @@ function renderLedgerTab(c){
   }else{
     entries.forEach(l=>{
       const amt=Number(l.amount||0);
-      h+='<div class="ledger-row"><div><div>'+esc(l.note||(amt>0?'بيع آجل':'دفعة'))+'</div><div class="ledger-note">'+dFormat(l.created_at)+(l.profiles?' — '+esc(l.profiles.full_name):'')+'</div></div><div class="ledger-amt '+(amt>0?'debt':'pay')+'">'+(amt>0?'+':'')+amt.toFixed(2)+' ج</div></div>';
+      h+='<div class="ledger-row"><div><div>'+esc(l.note||(amt>0?'بيع آجل':'دفعة'))+'</div><div class="ledger-note">'+dFormat(l.created_at)+((l.profiles&&l.profiles.full_name)||l.created_by_name_snapshot?' — '+esc((l.profiles&&l.profiles.full_name)||l.created_by_name_snapshot):'')+'</div></div><div class="ledger-amt '+(amt>0?'debt':'pay')+'">'+(amt>0?'+':'')+amt.toFixed(2)+' ج</div></div>';
     });
   }
   pane.innerHTML=h;
@@ -277,8 +277,8 @@ function renderFollowupsTab(c){
       h+='<div class="followup-row'+(f.status==='done'?' done':'')+'">'+
         '<div class="followup-top"><div>'+
           '<span class="followup-type '+esc(f.followup_type)+'">'+(FOLLOWUP_LABELS[f.followup_type]||f.followup_type)+'</span>'+
-          (f.products?' — '+esc(f.products.name):'')+
-          '<div class="followup-meta">'+dFormat(f.created_at)+(f.profiles?' — '+esc(f.profiles.full_name):'')+(f.assigned_to?' — مسؤول: '+esc((employeesCache.find(e=>e.id===f.assigned_to)||{}).full_name||'غير معروف'):'')+'</div>'+
+          ((f.products&&f.products.name)||f.product_name_snapshot?' — '+esc((f.products&&f.products.name)||f.product_name_snapshot):'')+
+          '<div class="followup-meta">'+dFormat(f.created_at)+((f.profiles&&f.profiles.full_name)||f.created_by_name_snapshot?' — '+esc((f.profiles&&f.profiles.full_name)||f.created_by_name_snapshot):'')+((f.assigned_to||f.assigned_to_name_snapshot)?' — مسؤول: '+esc((employeesCache.find(e=>e.id===f.assigned_to)||{}).full_name||f.assigned_to_name_snapshot||'غير معروف'):'')+'</div>'+
           (f.note?'<div style="margin-top:4px">'+esc(f.note)+'</div>':'')+
           (f.next_followup_date?'<div class="followup-next '+urgency+'">📅 المتابعة القادمة: '+esc(f.next_followup_date)+(urgency==='overdue'?' (متأخرة)':urgency==='soon'?' (قريبة)':'')+'</div>':'')+
         '</div>'+
@@ -325,7 +325,7 @@ async function deleteFollowup(c,id){
   if(updated)renderCustomerModal(updated,'followups');
 }
 
-function renderTimelineTab(c){const pane=document.getElementById('paneTimeline');const events=[];salesCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:'شراء '+(x.products?.name||'منتج'),detail:'كمية '+x.quantity+' — '+Number(x.sale_price||0).toFixed(2)+' ج.م'}));ledgerCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:Number(x.amount||0)<0?'تسجيل دفعة':'تسجيل مديونية',detail:x.note||''}));followupsCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:'متابعة: '+(FOLLOWUP_LABELS[x.followup_type]||x.followup_type),detail:x.outcome||x.note||'—'}));events.sort((a,b)=>new Date(b.date)-new Date(a.date));pane.innerHTML=events.length?events.slice(0,100).map(e=>'<div class="followup-row"><div class="followup-top"><strong>'+esc(e.title)+'</strong><span class="followup-meta">'+dFormat(e.date)+'</span></div><div class="followup-meta">'+esc(e.detail)+'</div></div>').join(''):'<p class="loading">لا يوجد نشاط مسجل بعد</p>'}
+function renderTimelineTab(c){const pane=document.getElementById('paneTimeline');const events=[];salesCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:'شراء '+(x.products?.name||x.product_name_snapshot||'منتج'),detail:'كمية '+x.quantity+' — '+Number(x.sale_price||0).toFixed(2)+' ج.م'}));ledgerCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:Number(x.amount||0)<0?'تسجيل دفعة':'تسجيل مديونية',detail:x.note||''}));followupsCache.filter(x=>x.customer_id===c.id).forEach(x=>events.push({date:x.created_at,title:'متابعة: '+(FOLLOWUP_LABELS[x.followup_type]||x.followup_type),detail:x.outcome||x.note||'—'}));events.sort((a,b)=>new Date(b.date)-new Date(a.date));pane.innerHTML=events.length?events.slice(0,100).map(e=>'<div class="followup-row"><div class="followup-top"><strong>'+esc(e.title)+'</strong><span class="followup-meta">'+dFormat(e.date)+'</span></div><div class="followup-meta">'+esc(e.detail)+'</div></div>').join(''):'<p class="loading">لا يوجد نشاط مسجل بعد</p>'}
 document.getElementById('addCustomerBtn').addEventListener('click',()=>{
   const blank={id:null,name:'عميل جديد',phone:'',credit_limit:null,balance:0};
   document.getElementById('customerModal').classList.remove('hidden');

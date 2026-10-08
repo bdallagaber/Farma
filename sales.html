@@ -3678,7 +3678,7 @@ async function loadRecentSales() {
     sb
       .from('sales')
       .select(
-        'id, quantity, unit_sold, sale_price, created_at, product_id, products(name, unit_small, unit_medium, unit_large, unit_medium_to_small, unit_large_to_medium), profiles(full_name), customers(name)'
+        'id, quantity, unit_sold, sale_price, created_at, product_id, product_name_snapshot, employee_name_snapshot, products(name, unit_small, unit_medium, unit_large, unit_medium_to_small, unit_large_to_medium), profiles(full_name), customers(name)'
       )
       .order(
         'created_at',
@@ -3839,9 +3839,7 @@ async function loadRecentSales() {
 
       '<td>' +
       escapeHtml(
-        s.products
-          ? s.products.name
-          : '—'
+        (s.products && s.products.name) || s.product_name_snapshot || '—'
       ) +
       '</td>' +
 
@@ -3862,9 +3860,7 @@ async function loadRecentSales() {
 
       '<td>' +
       escapeHtml(
-        s.profiles
-          ? s.profiles.full_name
-          : '—'
+        (s.profiles && s.profiles.full_name) || s.employee_name_snapshot || '—'
       ) +
       '</td>' +
 
