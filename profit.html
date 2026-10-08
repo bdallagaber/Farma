@@ -127,7 +127,7 @@
       return { data: all, error: null };
     }
 
-    let salesQuery = sb.from('sales').select('quantity, unit_sold, sale_price, product_id, products(unit_medium, unit_medium_to_small, unit_large, unit_large_to_medium, unit_small)');
+    let salesQuery = sb.from('sales').select('quantity, unit_sold, sale_price, product_id, product_id_snapshot, product_snapshot, products(unit_medium, unit_medium_to_small, unit_large, unit_large_to_medium, unit_small)');
     if (startDate) salesQuery = salesQuery.gte('created_at', startDate);
     const { data: sales, error: salesError } = await fetchAllPaged(salesQuery);
 
@@ -136,9 +136,9 @@
       return;
     }
 
-    const { data: costs } = await fetchAllPaged(sb.from('product_costs').select('product_id, purchase_price'));
+    const { data: costs } = await fetchAllPaged(sb.from('product_costs').select('product_id, product_id_snapshot, purchase_price'));
     const costMap = {};
-    (costs || []).forEach(c => { costMap[c.product_id] = c.purchase_price; });
+    (costs || []).forEach(c => { const id = c.product_id || c.product_id_snapshot; if (id) costMap[id] = c.purchase_price; });
 
     let expensesQuery = sb.from('expenses').select('amount');
     if (startDate) expensesQuery = expensesQuery.gte('created_at', startDate);
@@ -151,8 +151,8 @@
     for (const s of sales) {
       revenue += Number(s.sale_price);
 
-      const p = s.products;
-      const purchasePrice = costMap[s.product_id];
+      const p = s.products || s.product_snapshot;
+      const purchasePrice = costMap[s.product_id || s.product_id_snapshot];
       if (p && purchasePrice) {
         const qtyMedium = p.unit_medium_to_small || 1;
         const qtyLarge = p.unit_large_to_medium || 1;
